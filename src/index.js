@@ -40,6 +40,7 @@ import EditorIfThenElse from './editors/if-then-else.js'
 import EditorNull from './editors/null.js'
 import Editor from './editors/editor.js'
 import { applyOverlay } from './helpers/overlay.js'
+import * as oold from './oold/index.js'
 
 export default {
   Schema,
@@ -84,5 +85,6 @@ export default {
   Create,
   version,
   SchemaGenerator,
-  applyOverlay
+  applyOverlay,
+  oold
 }

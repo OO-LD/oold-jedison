@@ -706,27 +706,27 @@ function normalizeNode(node, draft) {
     delete node.dependencies;
   }
 }
-function walk(node, draft, isMap = false) {
+function walk$6(node, draft, isMap = false) {
   if (isArray(node)) {
-    node.forEach((child) => walk(child, draft));
+    node.forEach((child) => walk$6(child, draft));
     return;
   }
   if (!isObject$1(node)) {
     return;
   }
   if (isMap) {
-    Object.values(node).forEach((child) => walk(child, draft));
+    Object.values(node).forEach((child) => walk$6(child, draft));
     return;
   }
   normalizeNode(node, draft);
   SCHEMA_KEYWORDS.forEach((keyword) => {
     if (hasOwn(node, keyword)) {
-      walk(node[keyword], draft, SCHEMA_MAPS.includes(keyword));
+      walk$6(node[keyword], draft, SCHEMA_MAPS.includes(keyword));
     }
   });
 }
 function normalizeSchema(schema, draft = getDraft(schema)) {
-  walk(schema, draft);
+  walk$6(schema, draft);
   return schema;
 }
 function allOf(context) {
@@ -8397,7 +8397,7 @@ class Jedison extends EventEmitter {
           if (isSet(node["x-allOf-merged"])) {
             return;
           }
-          const mergeAllOf = getSchemaXOption(node, "mergeAllOf") ?? this.options.mergeAllOf;
+          const mergeAllOf2 = getSchemaXOption(node, "mergeAllOf") ?? this.options.mergeAllOf;
           const conditionals = [];
           let nodeFinal = clone(node);
           node.allOf.forEach((subschema) => {
@@ -8408,7 +8408,7 @@ class Jedison extends EventEmitter {
                 else: subschema.else || null
               });
             } else {
-              nodeFinal = mergeAllOf ? combineDeep({}, nodeFinal, subschema) : nodeFinal;
+              nodeFinal = mergeAllOf2 ? combineDeep({}, nodeFinal, subschema) : nodeFinal;
             }
           });
           nodeFinal["x-allOf-merged"] = true;
@@ -13611,6 +13611,453 @@ function applyOverlay(schema, overlay) {
   });
   return result;
 }
+const OOLD_RANGE = "x-oold-range";
+const OOLD_REF = "x-oold-ref";
+const STRIPPED_KEYWORDS = [
+  "@context",
+  "x-oold-context",
+  "x-oold-sssom",
+  "x-oold-uuid",
+  "x-oold-version",
+  "x-oold-prior-version",
+  "x-oold-backward-compatible-with",
+  "x-oold-incompatible-with",
+  // Withdrawn in 1.0.0-rc.4 with no replacement. Both spellings occur in the wild.
+  "x-oold-reverse-default-properties",
+  "x-oold-reverse-defaultProperties"
+];
+const COLLECTED_KEYWORDS = [
+  "x-oold-uuid",
+  "x-oold-version",
+  "x-oold-instance-rdf-type"
+];
+const UI_KEYWORD_MAP = {
+  "x-oold-ui-widget": ["x-format"],
+  "x-oold-ui-property-order": ["x-propertyOrder"],
+  "x-oold-ui-property-group": ["x-category", "x-propGroup"],
+  "x-oold-ui-form-hidden": ["x-hidden"],
+  "x-oold-ui-enum-titles": ["x-enumTitles"],
+  "x-oold-ui-hint": ["x-info"],
+  "x-oold-ui-default-property": ["x-defaultProperty"]
+};
+const UI_RENDER_HIDDEN = "x-oold-ui-render-hidden";
+const MULTILANG_MAP = {
+  "x-oold-multilang-title": "title",
+  "x-oold-multilang-description": "description",
+  "x-oold-multilang-ui-hint": "x-oold-ui-hint",
+  "x-oold-multilang-ui-enum-titles": "x-oold-ui-enum-titles"
+};
+const NARROW_MAX = [
+  "maximum",
+  "exclusiveMaximum",
+  "maxLength",
+  "maxItems",
+  "maxProperties",
+  "maxContains"
+];
+const NARROW_MIN = [
+  "minimum",
+  "exclusiveMinimum",
+  "minLength",
+  "minItems",
+  "minProperties",
+  "minContains"
+];
+const ADDITIVE_MAPS = [
+  "properties",
+  "patternProperties",
+  "dependentSchemas",
+  "dependentRequired",
+  "$defs",
+  "definitions"
+];
+const ADDITIVE_ARRAYS = ["required"];
+const constants = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  ADDITIVE_ARRAYS,
+  ADDITIVE_MAPS,
+  COLLECTED_KEYWORDS,
+  MULTILANG_MAP,
+  NARROW_MAX,
+  NARROW_MIN,
+  OOLD_RANGE,
+  OOLD_REF,
+  STRIPPED_KEYWORDS,
+  UI_KEYWORD_MAP,
+  UI_RENDER_HIDDEN
+}, Symbol.toStringTag, { value: "Module" }));
+function mergeAllOf(schema) {
+  if (!isObject$1(schema)) {
+    return schema;
+  }
+  const walked = walk$5(schema);
+  return walked;
+}
+function walk$5(node) {
+  if (isArray(node)) {
+    return node.map(walk$5);
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const merged = isArray(node.allOf) ? flatten(node) : { ...node };
+  for (const [key, value] of Object.entries(merged)) {
+    if (key === "allOf") {
+      continue;
+    }
+    merged[key] = walk$5(value);
+  }
+  return merged;
+}
+function flatten(node) {
+  const { allOf: allOf2, ...own } = node;
+  let result = {};
+  for (const branch of allOf2) {
+    if (!isObject$1(branch)) {
+      continue;
+    }
+    result = mergeTwo(result, isArray(branch.allOf) ? flatten(branch) : branch);
+  }
+  return mergeTwo(result, own);
+}
+function mergeTwo(base, derived) {
+  const result = { ...base };
+  for (const [key, value] of Object.entries(derived)) {
+    if (value === null) {
+      delete result[key];
+      continue;
+    }
+    if (!(key in result)) {
+      result[key] = value;
+      continue;
+    }
+    result[key] = mergeValue(key, result[key], value);
+  }
+  return result;
+}
+function mergeValue(key, baseValue, derivedValue) {
+  if (ADDITIVE_ARRAYS.includes(key)) {
+    const union = isArray(baseValue) ? [...baseValue] : [];
+    for (const entry of isArray(derivedValue) ? derivedValue : []) {
+      if (!union.includes(entry)) {
+        union.push(entry);
+      }
+    }
+    return union;
+  }
+  if (ADDITIVE_MAPS.includes(key) && isObject$1(baseValue) && isObject$1(derivedValue)) {
+    const map = { ...baseValue };
+    for (const [name, sub] of Object.entries(derivedValue)) {
+      if (sub === null) {
+        delete map[name];
+      } else if (isObject$1(map[name]) && isObject$1(sub)) {
+        map[name] = mergeTwo(map[name], sub);
+      } else {
+        map[name] = sub;
+      }
+    }
+    return map;
+  }
+  if (NARROW_MAX.includes(key)) {
+    return narrow(baseValue, derivedValue, Math.min);
+  }
+  if (NARROW_MIN.includes(key)) {
+    return narrow(baseValue, derivedValue, Math.max);
+  }
+  if (key === "enum" && isArray(baseValue) && isArray(derivedValue)) {
+    const kept = derivedValue.filter((entry) => baseValue.includes(entry));
+    return kept.length ? kept : derivedValue;
+  }
+  return derivedValue;
+}
+function narrow(baseValue, derivedValue, pick2) {
+  if (typeof baseValue !== "number" || typeof derivedValue !== "number") {
+    return derivedValue;
+  }
+  return pick2(baseValue, derivedValue);
+}
+function resolveMultilang(schema, language = "en", fallbackLanguage = "en") {
+  return walk$4(schema, language, fallbackLanguage);
+}
+function walk$4(node, language, fallbackLanguage) {
+  if (isArray(node)) {
+    return node.map((entry) => walk$4(entry, language, fallbackLanguage));
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key in MULTILANG_MAP) {
+      continue;
+    }
+    result[key] = walk$4(value, language, fallbackLanguage);
+  }
+  for (const [key, target] of Object.entries(MULTILANG_MAP)) {
+    if (!isObject$1(node[key])) {
+      continue;
+    }
+    const picked = pick(node[key], language, fallbackLanguage);
+    if (isSet(picked)) {
+      result[target] = picked;
+    }
+  }
+  return result;
+}
+function pick(map, language, fallbackLanguage) {
+  for (const tag of candidates(language, fallbackLanguage)) {
+    if (isSet(map[tag])) {
+      return map[tag];
+    }
+  }
+  return void 0;
+}
+function candidates(language, fallbackLanguage) {
+  const tags = [];
+  for (const tag of [language, fallbackLanguage]) {
+    if (typeof tag !== "string" || tag === "") {
+      continue;
+    }
+    const parts = tag.split("-");
+    while (parts.length) {
+      const candidate = parts.join("-");
+      if (!tags.includes(candidate)) {
+        tags.push(candidate);
+      }
+      parts.pop();
+    }
+  }
+  return tags;
+}
+function mapUiKeywords(schema) {
+  return walk$3(schema);
+}
+function walk$3(node) {
+  if (isArray(node)) {
+    return node.map(walk$3);
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (key in UI_KEYWORD_MAP) {
+      continue;
+    }
+    result[key] = walk$3(value);
+  }
+  for (const [source, targets] of Object.entries(UI_KEYWORD_MAP)) {
+    if (!isSet(node[source])) {
+      continue;
+    }
+    for (const target of targets) {
+      if (!isSet(result[target])) {
+        result[target] = node[source];
+      }
+    }
+  }
+  return result;
+}
+function normaliseRange(range) {
+  if (isString(range)) {
+    return { classes: [range], union: false, subschema: void 0 };
+  }
+  if (isArray(range)) {
+    const classes = range.filter(isString);
+    return { classes, union: classes.length > 1, subschema: void 0 };
+  }
+  if (isObject$1(range)) {
+    const union = isArray(range.oneOf) || isArray(range.anyOf);
+    return { classes: collectRefs(range), union, subschema: range };
+  }
+  return { classes: [], union: false, subschema: void 0 };
+}
+function collectRefs(node, seen = /* @__PURE__ */ new Set()) {
+  if (isArray(node)) {
+    return node.flatMap((entry) => collectRefs(entry, seen));
+  }
+  if (!isObject$1(node)) {
+    return [];
+  }
+  const refs = [];
+  if (isString(node[OOLD_REF]) && !seen.has(node[OOLD_REF])) {
+    seen.add(node[OOLD_REF]);
+    refs.push(node[OOLD_REF]);
+  }
+  for (const key of ["allOf", "anyOf", "oneOf"]) {
+    if (isArray(node[key])) {
+      refs.push(...collectRefs(node[key], seen));
+    }
+  }
+  return refs;
+}
+function normaliseRanges(schema) {
+  return walk$2(schema);
+}
+function walk$2(node) {
+  if (isArray(node)) {
+    return node.map(walk$2);
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    result[key] = key === OOLD_RANGE ? value : walk$2(value);
+  }
+  if (OOLD_RANGE in node) {
+    result["x-oold-range-resolved"] = normaliseRange(node[OOLD_RANGE]);
+  }
+  return result;
+}
+function stripSemantics(schema) {
+  const collected = {
+    uuids: [],
+    instanceRdfTypes: void 0,
+    renderHidden: []
+  };
+  const stripped = walk$1(schema, collected, "#");
+  return { schema: stripped, collected };
+}
+function walk$1(node, collected, path) {
+  if (isArray(node)) {
+    return node.map((entry, index2) => walk$1(entry, collected, `${path}/${index2}`));
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  collect(node, collected, path);
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    if (STRIPPED_KEYWORDS.includes(key)) {
+      continue;
+    }
+    result[key] = walk$1(value, collected, `${path}/${key}`);
+  }
+  return result;
+}
+function collect(node, collected, path) {
+  if (isSet(node["x-oold-uuid"]) && !collected.uuids.includes(node["x-oold-uuid"])) {
+    collected.uuids.push(node["x-oold-uuid"]);
+  }
+  if (path === "#" && isSet(node["x-oold-instance-rdf-type"])) {
+    collected.instanceRdfTypes = node["x-oold-instance-rdf-type"];
+  }
+  if (node[UI_RENDER_HIDDEN] === true) {
+    collected.renderHidden.push(path);
+  }
+}
+function preprocess(schema, options = {}) {
+  const language = options.language ?? "en";
+  const fallbackLanguage = options.fallbackLanguage ?? "en";
+  let result = clone(schema);
+  result = mergeAllOf(result);
+  result = resolveMultilang(result, language, fallbackLanguage);
+  result = mapUiKeywords(result);
+  result = normaliseRanges(result);
+  const { schema: stripped, collected } = stripSemantics(result);
+  return { schema: stripped, collected };
+}
+function rebase(schema, baseUri) {
+  if (!isObject$1(schema) || !isString(baseUri) || baseUri === "") {
+    return schema;
+  }
+  return walk(schema, baseUri);
+}
+function walk(node, baseUri) {
+  if (isArray(node)) {
+    return node.map((entry) => walk(entry, baseUri));
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const result = {};
+  const base = isString(node.$id) ? absolute(node.$id, baseUri) : baseUri;
+  for (const [key, value] of Object.entries(node)) {
+    result[key] = key === "$id" ? base : walk(value, base);
+  }
+  return result;
+}
+function absolute(uri, baseUri) {
+  try {
+    return new URL(uri, baseUri).href;
+  } catch (error) {
+    return uri;
+  }
+}
+class OoldRefResolver {
+  constructor(load, options = {}) {
+    this.load = load;
+    this.maxDepth = options.maxDepth ?? 16;
+    this.cache = /* @__PURE__ */ new Map();
+  }
+  /**
+   * Returns the referenced schema, or null when the reference cannot be loaded.
+   * Repeated requests for the same target are served from cache, and a request
+   * already in flight is shared rather than issued twice.
+   */
+  async resolve(ref, baseUri) {
+    const key = this.key(ref, baseUri);
+    if (!this.cache.has(key)) {
+      this.cache.set(key, Promise.resolve(this.load(ref, baseUri)).catch(() => null));
+    }
+    return this.cache.get(key);
+  }
+  /**
+   * Expands every x-oold-ref reachable from the node, stopping at a cycle or at
+   * maxDepth. Returns a copy, the input is not modified.
+   */
+  async expand(node, baseUri, seen = /* @__PURE__ */ new Set(), depth = 0) {
+    if (isArray(node)) {
+      return Promise.all(node.map((entry) => this.expand(entry, baseUri, seen, depth)));
+    }
+    if (!isObject$1(node)) {
+      return node;
+    }
+    const result = {};
+    for (const [key2, value] of Object.entries(node)) {
+      if (key2 === OOLD_REF) {
+        continue;
+      }
+      result[key2] = await this.expand(value, baseUri, seen, depth);
+    }
+    const ref = node[OOLD_REF];
+    if (!isString(ref)) {
+      return result;
+    }
+    const key = this.key(ref, baseUri);
+    if (seen.has(key) || depth >= this.maxDepth) {
+      result[OOLD_REF] = ref;
+      result["x-oold-ref-cut"] = true;
+      return result;
+    }
+    const target = await this.resolve(ref, baseUri);
+    if (!isObject$1(target)) {
+      result[OOLD_REF] = ref;
+      result["x-oold-ref-unresolved"] = true;
+      return result;
+    }
+    const expanded = await this.expand(target, baseUri, /* @__PURE__ */ new Set([...seen, key]), depth + 1);
+    return { ...expanded, ...result };
+  }
+  key(ref, baseUri) {
+    return baseUri ? `${baseUri}::${ref}` : ref;
+  }
+}
+const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  OoldRefResolver,
+  constants,
+  mapUiKeywords,
+  mergeAllOf,
+  mergeTwo,
+  normaliseRange,
+  normaliseRanges,
+  preprocess,
+  rebase,
+  resolveMultilang,
+  stripSemantics
+}, Symbol.toStringTag, { value: "Module" }));
 const index = {
   Schema,
   Utils,
@@ -13654,7 +14101,8 @@ const index = {
   Create: Jedison,
   version,
   SchemaGenerator,
-  applyOverlay
+  applyOverlay,
+  oold
 };
 export {
   index as default

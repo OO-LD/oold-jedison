@@ -60,6 +60,14 @@ Retrieval is delegated to the active backend by passing a backend-supplied funct
 while a deployment storing them in a wiki slot or a database supplies a function that maps a class
 identifier to its storage location.
 
+A document is rebased onto its retrieval URI before resolution begins. Specification examples
+carry a relative `$id` such as `Person.schema.json` and name their parent as `Thing.schema.json`,
+and a relative reference resolved against a relative base yields no absolute URI. The reference is
+then never retrieved, because retrieval is attempted only for references that resolve to an HTTP
+URI. Resolution does not fail at that point but reports the reference as missing, and the error
+surfaces later when the reference is expanded. Since the backend knows where it fetched a document
+from even when the document does not say, the retrieval URI is supplied as the base.
+
 `x-oold-ref`, which appears inside `x-oold-range` and is deliberately invisible to generic `$ref`
 resolvers, is resolved by this library. Resolution is lazy and terminates on cycles.
 
