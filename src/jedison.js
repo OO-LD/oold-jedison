@@ -23,6 +23,7 @@ import {
   getSchemaType, getSchemaXOption
 } from './helpers/schema.js'
 import { resolveAlias } from './helpers/option-aliases.js'
+import { carryOver } from './helpers/carry-over.js'
 import { bootstrapIcons, fontAwesome3, fontAwesome4, fontAwesome5, fontAwesome6, glyphicons } from './themes/icons/icons.js'
 import UiResolver from './ui-resolver.js'
 import Translator from './i18n/translator.js'
@@ -584,6 +585,85 @@ class Jedison extends EventEmitter {
   setValue () {
     this.root.setValue(...arguments)
     this.updateInstancesWatchedData()
+  }
+
+  /**
+   * Replaces the schema without recreating the editor.
+   *
+   * Values are kept where the new schema defines a place for them that its
+   * type admits, and whatever cannot be kept is returned rather than discarded
+   * silently, so the caller can tell the user what was lost.
+   *
+   * Listeners, watchers, options and the theme survive; only the instance tree
+   * and the DOM below the container are rebuilt.
+   *
+   * @param {object} schema
+   * @param {object} [config]
+   * @param {boolean} [config.keepValues] carry the current value over, default true
+   * @param {*} [config.data] use this value instead of the current one
+   * @return {{dropped: string[]}}
+   */
+  setSchema (schema, config = {}) {
+    const keepValues = config.keepValues !== false
+    const source = isSet(config.data) ? config.data : (keepValues ? this.getValue() : undefined)
+
+    const normalized = normalizeSchema(clone(schema))
+
+    let data
+    let dropped = []
+
+    if (isSet(source)) {
+      const carried = carryOver(source, normalized)
+      data = carried.value
+      dropped = carried.dropped
+    }
+
+    this.root.destroy()
+    this.instances.clear()
+
+    if (this.isEditor && this.container) {
+      this.container.innerHTML = ''
+    }
+
+    this.options.schema = normalized
+    this.schema = normalized
+    this.options.data = data
+
+    this.validator = new Validator({
+      refParser: this.refParser,
+      assertFormat: this.options.assertFormat,
+      translator: this.translator,
+      constraints: this.options.constraints,
+      subErrors: this.options.subErrors
+    })
+
+    this.root = this.createInstance({
+      jedison: this,
+      schema: this.options.schema,
+      path: this.rootName
+    })
+
+    // bindEventListeners() attached to the old root, which has just been
+    // replaced. Only the forwarding is re-attached; the rest of the bindings
+    // are on this instance and survive.
+    this.root.on('change', (initiator) => {
+      this.emit('change', initiator)
+    })
+
+    if (isSet(data)) {
+      this.root.setValue(data, false)
+    }
+
+    if (this.isEditor && this.container) {
+      this.appendHiddenInput()
+      this.container.appendChild(this.root.ui.control.container)
+      this.container.classList.add('jedi-ready')
+    }
+
+    this.updateInstancesWatchedData()
+    this.emit('schema-change', { dropped })
+
+    return { dropped }
   }
 
   /**
