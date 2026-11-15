@@ -1,7 +1,7 @@
 {
-  "name": "jedison",
+  "name": "@oo-ld/oold-jedison",
   "version": "1.31.1",
-  "description": "Framework-agnostic JavaScript library that generates and validates forms from JSON Schema, with zero runtime dependencies.",
+  "description": "Form editor for OO-LD schemas. Layered fork of jedison adding typed references, inline create, live schema switching, class-tree selection and swappable backends.",
   "main": "./dist/cjs/jedison.cjs",
   "module": "./dist/esm/jedison.js",
   "type": "module",
@@ -50,12 +50,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/germanbisurgi/jedison.git"
+    "url": "git+https://github.com/OO-LD/oold-jedison.git"
   },
   "keywords": [
     "json",
     "json-schema",
     "json-schema-form",
+    "json-ld",
+    "oo-ld",
+    "linked-data",
     "schema",
     "validation",
     "editor",
@@ -69,11 +72,14 @@
     "cms"
   ],
   "author": "German Bisurgi <gebisurgi@protonmail.com>",
+  "contributors": [
+    "OO-LD contributors (https://github.com/OO-LD)"
+  ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/germanbisurgi/jedison/issues"
+    "url": "https://github.com/OO-LD/oold-jedison/issues"
   },
-  "homepage": "https://github.com/germanbisurgi/jedison#readme",
+  "homepage": "https://github.com/OO-LD/oold-jedison#readme",
   "devDependencies": {
     "@milkdown/crepe": "^7.21.3",
     "@milkdown/kit": "^7.21.3",

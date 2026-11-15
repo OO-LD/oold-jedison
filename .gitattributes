@@ -1,0 +1,22 @@
+# Upstream ships no .gitattributes, so on a machine with core.autocrlf=true the working
+# tree is CRLF while the index is LF. Every build then rewrites dist/ with LF and the
+# files show as modified with no content change. Pin LF so the tree matches the index.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+
+# Build output committed by upstream. Both are regenerated from source, so a rebase
+# conflict in them carries no information. Keep our side and rebuild afterwards:
+#
+#   git config merge.ours.driver true   # once per clone, see CONTRIBUTING-OOLD.md
+#   yarn build                          # after every upstream sync
+#
+# dist/  <- vite.config.prod.js  from src/
+# docs/  <- vite.config.pages.js from src-docs/
+dist/** merge=ours -diff linguist-generated
+docs/** merge=ours -diff linguist-generated
+
+# Lockfile: ours wins, then re-resolve.
+yarn.lock merge=ours -diff
