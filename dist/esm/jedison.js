@@ -706,27 +706,27 @@ function normalizeNode(node, draft) {
     delete node.dependencies;
   }
 }
-function walk$6(node, draft, isMap = false) {
+function walk$8(node, draft, isMap = false) {
   if (isArray(node)) {
-    node.forEach((child) => walk$6(child, draft));
+    node.forEach((child) => walk$8(child, draft));
     return;
   }
   if (!isObject$1(node)) {
     return;
   }
   if (isMap) {
-    Object.values(node).forEach((child) => walk$6(child, draft));
+    Object.values(node).forEach((child) => walk$8(child, draft));
     return;
   }
   normalizeNode(node, draft);
   SCHEMA_KEYWORDS.forEach((keyword) => {
     if (hasOwn(node, keyword)) {
-      walk$6(node[keyword], draft, SCHEMA_MAPS.includes(keyword));
+      walk$8(node[keyword], draft, SCHEMA_MAPS.includes(keyword));
     }
   });
 }
 function normalizeSchema(schema, draft = getDraft(schema)) {
-  walk$6(schema, draft);
+  walk$8(schema, draft);
   return schema;
 }
 function allOf(context) {
@@ -1565,10 +1565,10 @@ function prefixItems(context) {
   const prefixItems2 = getSchemaPrefixItems(context.schema);
   if (isArray(context.value) && isSet(prefixItems2)) {
     const enableSubErrors = getSchemaXOption(context.schema, "subErrors") ?? context.validator.subErrors;
-    prefixItems2.forEach((itemSchema, index2) => {
+    prefixItems2.forEach((itemSchema2, index2) => {
       const itemValue = context.value[index2];
       if (isSet(itemValue)) {
-        const tmpErrors = context.validator.getErrors(itemValue, itemSchema, index2, context.path + "/" + index2);
+        const tmpErrors = context.validator.getErrors(itemValue, itemSchema2, index2, context.path + "/" + index2);
         if (tmpErrors.length > 0) {
           const error = {
             type: "error",
@@ -1618,10 +1618,10 @@ function properties(context) {
   if (isObject$1(context.value) && isSet(schemaProperties)) {
     Object.keys(schemaProperties).forEach((propertyName) => {
       if (hasOwn(context.value, propertyName)) {
-        const propertySchema = schemaProperties[propertyName];
+        const propertySchema2 = schemaProperties[propertyName];
         const propertyErrors = context.validator.getErrors(
           context.value[propertyName],
-          propertySchema,
+          propertySchema2,
           propertyName,
           context.path + "/" + propertyName
         );
@@ -3865,6 +3865,169 @@ class InstanceNumber extends Instance {
 }
 class InstanceNull extends Instance {
 }
+function typesOf(schema) {
+  if (!isObject$1(schema)) {
+    return [];
+  }
+  if (isArray(schema.type)) {
+    return schema.type;
+  }
+  return isString(schema.type) ? [schema.type] : [];
+}
+function matchesType(value, type2) {
+  switch (type2) {
+    case "string":
+      return isString(value);
+    case "number":
+      return isNumber(value);
+    case "integer":
+      return isInteger(value);
+    case "boolean":
+      return isBoolean(value);
+    case "array":
+      return isArray(value);
+    case "object":
+      return isObject$1(value);
+    case "null":
+      return value === null;
+    default:
+      return true;
+  }
+}
+function admits(value, schema) {
+  if (schema === true || !isSet(schema)) {
+    return true;
+  }
+  if (schema === false) {
+    return false;
+  }
+  if (!isObject$1(schema)) {
+    return true;
+  }
+  const types = typesOf(schema);
+  if (types.length && !types.some((type2) => matchesType(value, type2))) {
+    return false;
+  }
+  if (isArray(schema.enum) && !schema.enum.some((entry) => deepEquals(entry, value))) {
+    return false;
+  }
+  if (isSet(schema.const) && !deepEquals(schema.const, value)) {
+    return false;
+  }
+  if (isArray(schema.oneOf) || isArray(schema.anyOf)) {
+    const branches = [...schema.oneOf ?? [], ...schema.anyOf ?? []];
+    if (branches.length && !branches.some((branch) => admits(value, branch))) {
+      return false;
+    }
+  }
+  if (isArray(schema.allOf) && !schema.allOf.every((branch) => admits(value, branch))) {
+    return false;
+  }
+  return true;
+}
+function deepEquals(a, b) {
+  if (a === b) {
+    return true;
+  }
+  if (isArray(a) && isArray(b)) {
+    return a.length === b.length && a.every((entry, index2) => deepEquals(entry, b[index2]));
+  }
+  if (isObject$1(a) && isObject$1(b)) {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every((key) => deepEquals(a[key], b[key]));
+  }
+  return false;
+}
+function propertySchema(schema, key) {
+  if (isObject$1(schema.properties) && isSet(schema.properties[key])) {
+    return schema.properties[key];
+  }
+  if (isObject$1(schema.patternProperties)) {
+    for (const pattern2 of Object.keys(schema.patternProperties)) {
+      try {
+        if (new RegExp(pattern2, "u").test(key)) {
+          return schema.patternProperties[pattern2];
+        }
+      } catch (error) {
+      }
+    }
+  }
+  for (const branch of [...schema.allOf ?? [], ...schema.oneOf ?? [], ...schema.anyOf ?? []]) {
+    if (isObject$1(branch)) {
+      const found = propertySchema(branch, key);
+      if (found !== void 0 && found !== false) {
+        return found;
+      }
+    }
+  }
+  if (isSet(schema.additionalProperties)) {
+    return schema.additionalProperties;
+  }
+  if (schema.unevaluatedProperties === false) {
+    return false;
+  }
+  return true;
+}
+function itemSchema(schema, index2) {
+  if (isArray(schema.prefixItems) && index2 < schema.prefixItems.length) {
+    return schema.prefixItems[index2];
+  }
+  if (isSet(schema.items)) {
+    return schema.items;
+  }
+  return void 0;
+}
+function carryOver(value, schema, options = {}) {
+  const dropped = [];
+  const kept = walk$7(value, schema, "#", dropped);
+  return { value: kept, dropped };
+}
+function walk$7(value, schema, path, dropped, options) {
+  if (!isSet(value)) {
+    return void 0;
+  }
+  if (schema === false) {
+    dropped.push(path);
+    return void 0;
+  }
+  const effective = isObject$1(schema) ? schema : {};
+  const types = typesOf(effective);
+  if (isObject$1(value) && (types.includes("object") || !types.length)) {
+    const result = {};
+    for (const [key, member] of Object.entries(value)) {
+      const sub = propertySchema(effective, key);
+      if (sub === false) {
+        dropped.push(`${path}/${key}`);
+        continue;
+      }
+      const carried = walk$7(member, sub, `${path}/${key}`, dropped);
+      if (isSet(carried)) {
+        result[key] = carried;
+      }
+    }
+    return result;
+  }
+  if (isArray(value) && (types.includes("array") || !types.length)) {
+    const result = [];
+    value.forEach((entry, index2) => {
+      const sub = itemSchema(effective, index2);
+      if (!isSet(sub)) {
+        dropped.push(`${path}/${index2}`);
+        return;
+      }
+      const carried = walk$7(entry, sub, `${path}/${index2}`, dropped);
+      if (isSet(carried)) {
+        result.push(carried);
+      }
+    });
+    return result;
+  }
+  if (!admits(value, effective)) {
+    dropped.push(path);
+    return void 0;
+  }
+  return clone(value);
+}
 const glyphicons = {
   properties: "glyphicon glyphicon-list",
   delete: "glyphicon glyphicon-trash",
@@ -6008,17 +6171,17 @@ class EditorArrayTableObject extends EditorArray {
       schemaItems = this.instance.jedison.refParser.expand(schemaItems);
     }
     const itemProperties = getSchemaProperties(schemaItems);
-    Object.entries(itemProperties).forEach(([propertyKey, propertySchema]) => {
+    Object.entries(itemProperties).forEach(([propertyKey, propertySchema2]) => {
       const th2 = this.theme.getTableHeader();
-      if (propertySchema.title) {
+      if (propertySchema2.title) {
         const fakeLabel = this.theme.getFakeLabel({
-          content: propertySchema.title
+          content: propertySchema2.title
         });
         th2.appendChild(fakeLabel.label);
       }
-      const schemaXInfo = getSchemaXOption(propertySchema, "info");
+      const schemaXInfo = getSchemaXOption(propertySchema2, "info");
       if (isSet(schemaXInfo)) {
-        const infoContent = this.getInfo(propertySchema);
+        const infoContent = this.getInfo(propertySchema2);
         const info = this.theme.getInfo(infoContent);
         if (schemaXInfo.variant === "modal") {
           this.theme.infoAsModal(info, this.getIdFromPath(this.instance.path) + "-" + propertyKey, infoContent);
@@ -8516,6 +8679,68 @@ class Jedison extends EventEmitter {
   setValue() {
     this.root.setValue(...arguments);
     this.updateInstancesWatchedData();
+  }
+  /**
+   * Replaces the schema without recreating the editor.
+   *
+   * Values are kept where the new schema defines a place for them that its
+   * type admits, and whatever cannot be kept is returned rather than discarded
+   * silently, so the caller can tell the user what was lost.
+   *
+   * Listeners, watchers, options and the theme survive; only the instance tree
+   * and the DOM below the container are rebuilt.
+   *
+   * @param {object} schema
+   * @param {object} [config]
+   * @param {boolean} [config.keepValues] carry the current value over, default true
+   * @param {*} [config.data] use this value instead of the current one
+   * @return {{dropped: string[]}}
+   */
+  setSchema(schema, config = {}) {
+    const keepValues = config.keepValues !== false;
+    const source = isSet(config.data) ? config.data : keepValues ? this.getValue() : void 0;
+    const normalized = normalizeSchema(clone(schema));
+    let data;
+    let dropped = [];
+    if (isSet(source)) {
+      const carried = carryOver(source, normalized);
+      data = carried.value;
+      dropped = carried.dropped;
+    }
+    this.root.destroy();
+    this.instances.clear();
+    if (this.isEditor && this.container) {
+      this.container.innerHTML = "";
+    }
+    this.options.schema = normalized;
+    this.schema = normalized;
+    this.options.data = data;
+    this.validator = new Validator({
+      refParser: this.refParser,
+      assertFormat: this.options.assertFormat,
+      translator: this.translator,
+      constraints: this.options.constraints,
+      subErrors: this.options.subErrors
+    });
+    this.root = this.createInstance({
+      jedison: this,
+      schema: this.options.schema,
+      path: this.rootName
+    });
+    this.root.on("change", (initiator) => {
+      this.emit("change", initiator);
+    });
+    if (isSet(data)) {
+      this.root.setValue(data, false);
+    }
+    if (this.isEditor && this.container) {
+      this.appendHiddenInput();
+      this.container.appendChild(this.root.ui.control.container);
+      this.container.classList.add("jedi-ready");
+    }
+    this.updateInstancesWatchedData();
+    this.emit("schema-change", { dropped });
+    return { dropped };
   }
   /**
    * Returns an instance by JSON Pointer
@@ -13690,12 +13915,12 @@ function mergeAllOf(schema) {
   if (!isObject$1(schema)) {
     return schema;
   }
-  const walked = walk$5(schema);
+  const walked = walk$6(schema);
   return walked;
 }
-function walk$5(node) {
+function walk$6(node) {
   if (isArray(node)) {
-    return node.map(walk$5);
+    return node.map(walk$6);
   }
   if (!isObject$1(node)) {
     return node;
@@ -13705,7 +13930,7 @@ function walk$5(node) {
     if (key === "allOf") {
       continue;
     }
-    merged[key] = walk$5(value);
+    merged[key] = walk$6(value);
   }
   return merged;
 }
@@ -13777,11 +14002,11 @@ function narrow(baseValue, derivedValue, pick2) {
   return pick2(baseValue, derivedValue);
 }
 function resolveMultilang(schema, language = "en", fallbackLanguage = "en") {
-  return walk$4(schema, language, fallbackLanguage);
+  return walk$5(schema, language, fallbackLanguage);
 }
-function walk$4(node, language, fallbackLanguage) {
+function walk$5(node, language, fallbackLanguage) {
   if (isArray(node)) {
-    return node.map((entry) => walk$4(entry, language, fallbackLanguage));
+    return node.map((entry) => walk$5(entry, language, fallbackLanguage));
   }
   if (!isObject$1(node)) {
     return node;
@@ -13791,7 +14016,7 @@ function walk$4(node, language, fallbackLanguage) {
     if (key in MULTILANG_MAP) {
       continue;
     }
-    result[key] = walk$4(value, language, fallbackLanguage);
+    result[key] = walk$5(value, language, fallbackLanguage);
   }
   for (const [key, target] of Object.entries(MULTILANG_MAP)) {
     if (!isObject$1(node[key])) {
@@ -13830,11 +14055,11 @@ function candidates(language, fallbackLanguage) {
   return tags;
 }
 function mapUiKeywords(schema) {
-  return walk$3(schema);
+  return walk$4(schema);
 }
-function walk$3(node) {
+function walk$4(node) {
   if (isArray(node)) {
-    return node.map(walk$3);
+    return node.map(walk$4);
   }
   if (!isObject$1(node)) {
     return node;
@@ -13844,7 +14069,7 @@ function walk$3(node) {
     if (key in UI_KEYWORD_MAP) {
       continue;
     }
-    result[key] = walk$3(value);
+    result[key] = walk$4(value);
   }
   for (const [source, targets] of Object.entries(UI_KEYWORD_MAP)) {
     if (!isSet(node[source])) {
@@ -13892,18 +14117,18 @@ function collectRefs(node, seen = /* @__PURE__ */ new Set()) {
   return refs;
 }
 function normaliseRanges(schema) {
-  return walk$2(schema);
+  return walk$3(schema);
 }
-function walk$2(node) {
+function walk$3(node) {
   if (isArray(node)) {
-    return node.map(walk$2);
+    return node.map(walk$3);
   }
   if (!isObject$1(node)) {
     return node;
   }
   const result = {};
   for (const [key, value] of Object.entries(node)) {
-    result[key] = key === OOLD_RANGE ? value : walk$2(value);
+    result[key] = key === OOLD_RANGE ? value : walk$3(value);
   }
   if (OOLD_RANGE in node) {
     result["x-oold-range-resolved"] = normaliseRange(node[OOLD_RANGE]);
@@ -13916,12 +14141,12 @@ function stripSemantics(schema) {
     instanceRdfTypes: void 0,
     renderHidden: []
   };
-  const stripped = walk$1(schema, collected, "#");
+  const stripped = walk$2(schema, collected, "#");
   return { schema: stripped, collected };
 }
-function walk$1(node, collected, path) {
+function walk$2(node, collected, path) {
   if (isArray(node)) {
-    return node.map((entry, index2) => walk$1(entry, collected, `${path}/${index2}`));
+    return node.map((entry, index2) => walk$2(entry, collected, `${path}/${index2}`));
   }
   if (!isObject$1(node)) {
     return node;
@@ -13932,7 +14157,7 @@ function walk$1(node, collected, path) {
     if (STRIPPED_KEYWORDS.includes(key)) {
       continue;
     }
-    result[key] = walk$1(value, collected, `${path}/${key}`);
+    result[key] = walk$2(value, collected, `${path}/${key}`);
   }
   return result;
 }
@@ -13962,11 +14187,11 @@ function rebase(schema, baseUri) {
   if (!isObject$1(schema) || !isString(baseUri) || baseUri === "") {
     return schema;
   }
-  return walk(schema, baseUri);
+  return walk$1(schema, baseUri);
 }
-function walk(node, baseUri) {
+function walk$1(node, baseUri) {
   if (isArray(node)) {
-    return node.map((entry) => walk(entry, baseUri));
+    return node.map((entry) => walk$1(entry, baseUri));
   }
   if (!isObject$1(node)) {
     return node;
@@ -13974,7 +14199,7 @@ function walk(node, baseUri) {
   const result = {};
   const base = isString(node.$id) ? absolute$1(node.$id, baseUri) : baseUri;
   for (const [key, value] of Object.entries(node)) {
-    result[key] = key === "$id" ? base : walk(value, base);
+    result[key] = key === "$id" ? base : walk$1(value, base);
   }
   return result;
 }
@@ -15767,8 +15992,8 @@ class EditorOoldTreeSelect extends EditorString {
   build() {
     const schema = this.instance.schema;
     const oold2 = getOoldOptions(this.instance);
-    const itemSchema = this.multiple && isSet(schema.items) ? schema.items : schema;
-    const spec = getRangeSpec(itemSchema) ?? { classes: [] };
+    const itemSchema2 = this.multiple && isSet(schema.items) ? schema.items : schema;
+    const spec = getRangeSpec(itemSchema2) ?? { classes: [] };
     this.backend = oold2.backend;
     this.control = this.theme.getObjectControl ? this.theme.getInputControl({
       title: this.getTitle(),
@@ -16017,6 +16242,209 @@ class InlineCreateHost {
     this.open = [];
   }
 }
+const DENSITIES = ["comfortable", "compact", "dense"];
+const DENSITY_OPTIONS = {
+  comfortable: {},
+  compact: {
+    card: false,
+    autoFlat: true,
+    enableCollapseToggle: true
+  },
+  dense: {
+    card: false,
+    autoFlat: true,
+    enableCollapseToggle: true,
+    btnContents: false
+  }
+};
+function densityOptions(density2) {
+  return DENSITY_OPTIONS[density2] ?? DENSITY_OPTIONS.comfortable;
+}
+function columnsFor(schema, density2 = "compact") {
+  if (!isObject$1(schema)) {
+    return 12;
+  }
+  const type2 = isArray(schema.type) ? schema.type[0] : schema.type;
+  const format2 = schema["x-format"] ?? schema.format;
+  const wideFormats = ["textarea", "markdown", "ace", "quill", "jodit", "milkdown", "simplemde", "bpmn", "json"];
+  if (isString(format2) && wideFormats.includes(format2)) {
+    return 12;
+  }
+  if (type2 === "object" || type2 === "array") {
+    return 12;
+  }
+  if (type2 === "boolean") {
+    return density2 === "dense" ? 3 : 4;
+  }
+  if (isArray(schema.enum)) {
+    return density2 === "dense" ? 3 : 4;
+  }
+  if (type2 === "number" || type2 === "integer") {
+    return density2 === "dense" ? 3 : 4;
+  }
+  if (type2 === "string") {
+    const long = isSet(schema.maxLength) && schema.maxLength > 120;
+    if (long) {
+      return 12;
+    }
+    return density2 === "dense" ? 4 : 6;
+  }
+  return 12;
+}
+function assignGrid(schema, options = {}) {
+  const density2 = options.density ?? "compact";
+  if (density2 === "comfortable") {
+    return schema;
+  }
+  return walk(schema, density2);
+}
+function walk(node, density2) {
+  var _a;
+  if (isArray(node)) {
+    return node.map((entry) => walk(entry, density2));
+  }
+  if (!isObject$1(node)) {
+    return node;
+  }
+  const result = {};
+  for (const [key, value] of Object.entries(node)) {
+    result[key] = walk(value, density2);
+  }
+  if (!isObject$1(result.properties)) {
+    return result;
+  }
+  const statedFormat = result["x-format"] ?? ((_a = result["x-options"]) == null ? void 0 : _a.format);
+  if (isSet(statedFormat)) {
+    return result;
+  }
+  const names = Object.keys(result.properties);
+  if (names.length < 2) {
+    return result;
+  }
+  const columns = {};
+  let anyNarrow = false;
+  for (const name of names) {
+    const width = columnsFor(result.properties[name], density2);
+    columns[name] = width;
+    if (width < 12) {
+      anyNarrow = true;
+    }
+  }
+  if (!anyNarrow) {
+    return result;
+  }
+  result["x-format"] = "grid";
+  for (const name of names) {
+    const property = result.properties[name];
+    if (!isObject$1(property)) {
+      continue;
+    }
+    if (isSet(property["x-grid"]) || isSet(property["x-gridColumns"])) {
+      continue;
+    }
+    result.properties[name] = {
+      ...property,
+      "x-grid": { columnsXs: 12, columnsMd: columns[name], columnsLg: columns[name] }
+    };
+  }
+  return result;
+}
+const density = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  DENSITIES,
+  DENSITY_OPTIONS,
+  assignGrid,
+  columnsFor,
+  densityOptions
+}, Symbol.toStringTag, { value: "Module" }));
+class ThemeOoldCompact extends ThemeBootstrap5 {
+  constructor(icons = null, options = {}) {
+    super(icons);
+    this.density = options.density ?? "compact";
+    this.styleInjected = false;
+  }
+  get isDense() {
+    return this.density === "dense";
+  }
+  /**
+   * Injected once rather than shipped as a stylesheet, so the theme stays a
+   * drop-in with no build step for the consumer.
+   */
+  injectStyles(doc) {
+    const target = doc ?? (typeof document !== "undefined" ? document : void 0);
+    if (!target || this.styleInjected || target.getElementById("jedi-oold-compact")) {
+      this.styleInjected = true;
+      return;
+    }
+    const style = target.createElement("style");
+    style.setAttribute("id", "jedi-oold-compact");
+    style.textContent = `
+.jedi-oold-compact .mb-3 { margin-bottom: .5rem !important; }
+.jedi-oold-compact label { margin-bottom: .125rem; font-size: .875rem; }
+.jedi-oold-compact .form-text { font-size: .75rem; margin-top: .125rem; }
+.jedi-oold-compact fieldset > legend { font-size: .9375rem; margin-bottom: .25rem; }
+.jedi-oold-compact fieldset:not(.card) {
+  border-left: 2px solid rgba(0,0,0,.08);
+  padding-left: .75rem;
+  margin-bottom: .5rem;
+}
+.jedi-oold-compact .jedi-oold-actions { padding: 0 .25rem; }
+.jedi-oold-compact .jedi-oold-actions .jedi-btn { padding: .125rem .375rem; }
+.jedi-oold-dense .mb-3 { margin-bottom: .25rem !important; }
+.jedi-oold-dense label { font-size: .8125rem; }
+.jedi-oold-dense .form-control, .jedi-oold-dense .form-select {
+  padding: .125rem .375rem;
+  font-size: .8125rem;
+}
+`;
+    target.head.appendChild(style);
+    this.styleInjected = true;
+  }
+  getInputControl(config) {
+    const control = super.getInputControl(config);
+    this.applyDensity(control.input);
+    return control;
+  }
+  getSelectControl(config) {
+    const control = super.getSelectControl(config);
+    this.applyDensity(control.input);
+    return control;
+  }
+  getTextareaControl(config) {
+    const control = super.getTextareaControl(config);
+    this.applyDensity(control.input);
+    return control;
+  }
+  applyDensity(input) {
+    if (!input || !this.isDense) {
+      return;
+    }
+    if (input.classList.contains("form-select")) {
+      input.classList.add("form-select-sm");
+    } else {
+      input.classList.add("form-control-sm");
+    }
+  }
+  getButton(config) {
+    const button = super.getButton(config);
+    if (this.isDense) {
+      button.classList.add("btn-sm");
+    }
+    return button;
+  }
+}
+function applyDensityClass(container, density2) {
+  if (!container) {
+    return;
+  }
+  container.classList.remove("jedi-oold-compact", "jedi-oold-dense");
+  if (density2 === "compact" || density2 === "dense") {
+    container.classList.add("jedi-oold-compact");
+  }
+  if (density2 === "dense") {
+    container.classList.add("jedi-oold-dense");
+  }
+}
 const OOLD_EDITORS = [EditorOoldRange, EditorOoldAutocomplete, EditorOoldTreeSelect];
 async function prepareSchema(schema, options = {}) {
   const based = options.baseUri ? rebase(schema, options.baseUri) : clone(schema);
@@ -16026,7 +16454,8 @@ async function prepareSchema(schema, options = {}) {
   await refParser.dereference(based);
   refParser.expandRecursive(based);
   const { schema: form, collected } = preprocess(based, options);
-  return { schema: form, collected, refParser };
+  const laidOut = assignGrid(form, { density: options.density ?? "comfortable" });
+  return { schema: laidOut, collected, refParser };
 }
 async function createOoldEditor(options = {}) {
   const { schema, collected, refParser } = await prepareSchema(options.schema ?? {}, options);
@@ -16034,9 +16463,16 @@ async function createOoldEditor(options = {}) {
     backend: options.backend,
     language: options.language ?? "en",
     hideAncestors: options.hideAncestors === true,
+    density: options.density ?? "comfortable",
     collected
   };
+  const density2 = options.density ?? "comfortable";
   const jedison = new Jedison({
+    // The density preset is applied first, so an explicit option still wins.
+    ...densityOptions(density2),
+    // Keeps the fields of a newly chosen class visible after a type switch,
+    // rather than only those the carried value happened to fill.
+    keepMissingSchemaFields: true,
     ...options.jedison,
     container: options.container,
     schema,
@@ -16064,8 +16500,101 @@ async function createOoldEditor(options = {}) {
       }
     });
   }
+  applyDensityClass(options.container, density2);
+  if (jedison.theme && typeof jedison.theme.injectStyles === "function") {
+    jedison.theme.injectStyles();
+  }
   jedison.oold = oold2;
   return jedison;
+}
+class TypeSwitcher {
+  constructor(options = {}) {
+    this.jedison = options.jedison;
+    this.backend = options.backend;
+    this.prepare = options.prepare;
+    this.language = options.language ?? "en";
+    this.currentClass = options.currentClass;
+    this.onSwitch = options.onSwitch;
+    this.listeners = {};
+    this.tree = new TreeController({
+      backend: this.backend,
+      rootClasses: this.currentClass ? [this.currentClass] : [],
+      multiple: false,
+      includeInstances: false,
+      // Inline creation shows only specialisation, since moving an entity up
+      // the hierarchy while creating it is not a meaningful gesture.
+      showAncestors: options.showAncestors !== false,
+      language: this.language
+    });
+  }
+  on(name, callback) {
+    this.listeners[name] = this.listeners[name] ?? [];
+    this.listeners[name].push(callback);
+    return this;
+  }
+  emit(name, payload) {
+    for (const callback of this.listeners[name] ?? []) {
+      callback(payload);
+    }
+  }
+  async init() {
+    return this.tree.init();
+  }
+  async expand(classRef) {
+    return this.tree.expand(classRef);
+  }
+  /**
+   * Switches the open editor to another class.
+   *
+   * Returns the dropped paths so the caller can tell the user what was lost,
+   * which is the whole reason setSchema reports them.
+   */
+  async switchTo(classRef) {
+    if (!classRef || classRef === this.currentClass) {
+      return { dropped: [], switched: false };
+    }
+    const response = await this.backend.schemas.resolve(classRef);
+    if (!response || !response.ok) {
+      this.emit("error", new Error(`Schema not available: ${classRef}`));
+      return { dropped: [], switched: false };
+    }
+    const target = await response.json();
+    const prepared = this.prepare ? await this.prepare(target, { baseUri: classRef }) : { schema: target };
+    const { dropped } = this.jedison.setSchema(prepared.schema);
+    this.currentClass = classRef;
+    this.tree.rootClasses = [classRef];
+    const result = { dropped, switched: true, classRef };
+    this.emit("switch", result);
+    if (typeof this.onSwitch === "function") {
+      this.onSwitch(result);
+    }
+    return result;
+  }
+  /**
+   * Describes what a switch would cost, without performing it.
+   *
+   * Lets a caller warn before the change rather than report after it.
+   */
+  async preview(classRef) {
+    const response = await this.backend.schemas.resolve(classRef);
+    if (!response || !response.ok) {
+      return { dropped: [], available: false };
+    }
+    const target = await response.json();
+    const prepared = this.prepare ? await this.prepare(target, { baseUri: classRef }) : { schema: target };
+    const { dropped } = carryOver(this.jedison.getValue(), prepared.schema);
+    return { dropped, available: true, schema: prepared.schema };
+  }
+  snapshot() {
+    return this.tree.snapshot();
+  }
+  get classes() {
+    return isArray(this.tree.rootClasses) ? this.tree.rootClasses : [];
+  }
+  destroy() {
+    this.tree.destroy();
+    this.listeners = {};
+  }
 }
 const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
@@ -16076,10 +16605,14 @@ const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty
   OOLD_EDITORS,
   OoldRefResolver,
   SuggestController,
+  ThemeOoldCompact,
   TreeController,
+  TypeSwitcher,
+  applyDensityClass,
   backend: index$1,
   constants,
   createOoldEditor,
+  density,
   mapUiKeywords,
   mergeAllOf,
   mergeTwo,
@@ -16136,6 +16669,8 @@ const index = {
   version,
   SchemaGenerator,
   applyOverlay,
+  carryOver,
+  admits,
   oold
 };
 export {

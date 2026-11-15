@@ -7,6 +7,8 @@ import EditorOoldRange from './editors/range.js'
 import EditorOoldAutocomplete from './editors/autocomplete.js'
 import EditorOoldTreeSelect from './editors/tree-select.js'
 import { InlineCreateHost } from './ui/inline-create.js'
+import { assignGrid, densityOptions } from './density.js'
+import { applyDensityClass } from './theme-compact.js'
 
 export const OOLD_EDITORS = [EditorOoldRange, EditorOoldAutocomplete, EditorOoldTreeSelect]
 
@@ -33,8 +35,9 @@ export async function prepareSchema (schema, options = {}) {
   refParser.expandRecursive(based)
 
   const { schema: form, collected } = preprocess(based, options)
+  const laidOut = assignGrid(form, { density: options.density ?? 'comfortable' })
 
-  return { schema: form, collected, refParser }
+  return { schema: laidOut, collected, refParser }
 }
 
 /**
@@ -52,10 +55,18 @@ export async function createOoldEditor (options = {}) {
     backend: options.backend,
     language: options.language ?? 'en',
     hideAncestors: options.hideAncestors === true,
+    density: options.density ?? 'comfortable',
     collected
   }
 
+  const density = options.density ?? 'comfortable'
+
   const jedison = new Create({
+    // The density preset is applied first, so an explicit option still wins.
+    ...densityOptions(density),
+    // Keeps the fields of a newly chosen class visible after a type switch,
+    // rather than only those the carried value happened to fill.
+    keepMissingSchemaFields: true,
     ...options.jedison,
     container: options.container,
     schema,
@@ -86,6 +97,12 @@ export async function createOoldEditor (options = {}) {
         })
       }
     })
+  }
+
+  applyDensityClass(options.container, density)
+
+  if (jedison.theme && typeof jedison.theme.injectStyles === 'function') {
+    jedison.theme.injectStyles()
   }
 
   jedison.oold = oold

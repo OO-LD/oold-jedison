@@ -15,6 +15,9 @@ import EditorOoldTreeSelect from './editors/tree-select.js'
 import { SuggestController } from './ui/suggest-controller.js'
 import { TreeController } from './ui/tree-controller.js'
 import { InlineCreateHost } from './ui/inline-create.js'
+import { TypeSwitcher } from './ui/type-switcher.js'
+import ThemeOoldCompact, { applyDensityClass } from './theme-compact.js'
+import * as density from './density.js'
 import * as template from './ui/template.js'
 
 export {
@@ -39,5 +42,9 @@ export {
   SuggestController,
   TreeController,
   InlineCreateHost,
+  TypeSwitcher,
+  ThemeOoldCompact,
+  applyDensityClass,
+  density,
   template
 }
