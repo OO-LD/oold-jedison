@@ -12,11 +12,12 @@ import { createOoldEditor, prepareSchema, OOLD_EDITORS } from './create.js'
 import EditorOoldRange from './editors/range.js'
 import EditorOoldAutocomplete from './editors/autocomplete.js'
 import EditorOoldTreeSelect from './editors/tree-select.js'
+import EditorOoldTreeSelectWunderbaum, { WUNDERBAUM_CDN } from './editors/tree-select-wunderbaum.js'
 import { SuggestController } from './ui/suggest-controller.js'
 import { TreeController } from './ui/tree-controller.js'
 import { InlineCreateHost } from './ui/inline-create.js'
 import { TypeSwitcher } from './ui/type-switcher.js'
-import ThemeOoldCompact, { applyDensityClass } from './theme-compact.js'
+import { applyDensity, injectDensityStyles } from './density.js'
 import * as density from './density.js'
 import * as template from './ui/template.js'
 
@@ -39,12 +40,14 @@ export {
   EditorOoldRange,
   EditorOoldAutocomplete,
   EditorOoldTreeSelect,
+  EditorOoldTreeSelectWunderbaum,
+  WUNDERBAUM_CDN,
   SuggestController,
   TreeController,
   InlineCreateHost,
   TypeSwitcher,
-  ThemeOoldCompact,
-  applyDensityClass,
+  applyDensity,
+  injectDensityStyles,
   density,
   template
 }

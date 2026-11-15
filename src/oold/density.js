@@ -1,45 +1,185 @@
 import { isObject, isArray, isString, isSet } from '../helpers/utils.js'
 
 /**
- * Layout density.
+ * Density is a skin, not a layout.
  *
- * The default rendering puts one field per row inside a card per object. With
- * three levels of inheritance that is three nested frames before the first
- * input, and on a wide screen most of the width goes unused.
+ * Two separate concerns were previously one. How many columns an object
+ * occupies and in what order its properties appear is a property of the
+ * schema. How tall a control is, how large its type is and how much air sits
+ * between rows is a property of the presentation, and has to work whatever
+ * schema is loaded and whatever theme is in use.
  *
- * A density is a preset over options jedison already has, not a separate
- * rendering path, so nothing here changes how anything is drawn. `comfortable`
- * is the upstream default and sets nothing at all.
+ * So density here is CSS custom properties on a container class, applied with
+ * plain element selectors rather than Bootstrap ones, and the grid lives in
+ * `assignGrid`, which is opt-in and independent.
  */
 export const DENSITIES = ['comfortable', 'compact', 'dense']
 
-export const DENSITY_OPTIONS = {
-  comfortable: {},
+/**
+ * The skin. Every value is a CSS length or scale, nothing structural.
+ */
+export const DENSITY_TOKENS = {
+  comfortable: {
+    '--jedi-control-padding-y': '0.375rem',
+    '--jedi-control-padding-x': '0.75rem',
+    '--jedi-control-font-size': '1rem',
+    '--jedi-control-line-height': '1.5',
+    '--jedi-label-font-size': '1rem',
+    '--jedi-label-margin': '0.5rem',
+    '--jedi-field-gap': '1rem',
+    '--jedi-legend-font-size': '1.25rem',
+    '--jedi-help-font-size': '0.875rem',
+    '--jedi-nest-indent': '1rem',
+    '--jedi-row-padding-y': '0.5rem'
+  },
   compact: {
-    card: false,
-    autoFlat: true,
-    enableCollapseToggle: true
+    '--jedi-control-padding-y': '0.1875rem',
+    '--jedi-control-padding-x': '0.5rem',
+    '--jedi-control-font-size': '0.875rem',
+    '--jedi-control-line-height': '1.35',
+    '--jedi-label-font-size': '0.8125rem',
+    '--jedi-label-margin': '0.125rem',
+    '--jedi-field-gap': '0.5rem',
+    '--jedi-legend-font-size': '0.9375rem',
+    '--jedi-help-font-size': '0.75rem',
+    '--jedi-nest-indent': '0.75rem',
+    '--jedi-row-padding-y': '0.25rem'
   },
   dense: {
-    card: false,
-    autoFlat: true,
-    enableCollapseToggle: true,
-    btnContents: false
+    '--jedi-control-padding-y': '0.0625rem',
+    '--jedi-control-padding-x': '0.375rem',
+    '--jedi-control-font-size': '0.8125rem',
+    '--jedi-control-line-height': '1.2',
+    '--jedi-label-font-size': '0.75rem',
+    '--jedi-label-margin': '0',
+    '--jedi-field-gap': '0.25rem',
+    '--jedi-legend-font-size': '0.875rem',
+    '--jedi-help-font-size': '0.6875rem',
+    '--jedi-nest-indent': '0.5rem',
+    '--jedi-row-padding-y': '0.125rem'
   }
+}
+
+/**
+ * Structural options the preset still sets. These are genuinely layout rather
+ * than skin, and are kept because a tighter skin on top of a card per nested
+ * object still wastes the space the cards take.
+ */
+export const DENSITY_OPTIONS = {
+  comfortable: {},
+  compact: { card: false, autoFlat: true },
+  dense: { card: false, autoFlat: true, btnContents: false }
 }
 
 export function densityOptions (density) {
   return DENSITY_OPTIONS[density] ?? DENSITY_OPTIONS.comfortable
 }
 
+export function densityTokens (density) {
+  return DENSITY_TOKENS[density] ?? DENSITY_TOKENS.comfortable
+}
+
+const STYLE_ID = 'jedi-density'
+
+/**
+ * Element selectors rather than theme classes, so the same rules hold for
+ * barebones, the Bootstrap themes and Tailwind.
+ */
+const STYLE_TEXT = `
+.jedi-density input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.jedi-density select,
+.jedi-density textarea {
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+  line-height: var(--jedi-control-line-height);
+  min-height: 0;
+}
+.jedi-density label,
+.jedi-density .form-check-label {
+  font-size: var(--jedi-label-font-size);
+  margin-bottom: var(--jedi-label-margin);
+}
+.jedi-density legend,
+.jedi-density .jedi-legend {
+  font-size: var(--jedi-legend-font-size);
+  margin-bottom: var(--jedi-label-margin);
+}
+.jedi-density small,
+.jedi-density .form-text,
+.jedi-density .jedi-description {
+  font-size: var(--jedi-help-font-size);
+}
+.jedi-density .mb-3 {
+  margin-bottom: var(--jedi-field-gap) !important;
+}
+.jedi-density .jedi-editor-container > .jedi-editor-container {
+  margin-bottom: var(--jedi-field-gap);
+}
+.jedi-density button {
+  font-size: var(--jedi-control-font-size);
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+}
+.jedi-density .list-group-item {
+  padding-top: var(--jedi-row-padding-y);
+  padding-bottom: var(--jedi-row-padding-y);
+  font-size: var(--jedi-control-font-size);
+}
+.jedi-density .jedi-oold-actions button {
+  padding: var(--jedi-control-padding-y) calc(var(--jedi-control-padding-x) / 1.5);
+}
+.jedi-density fieldset:not(.card) {
+  border-left: 2px solid rgba(127, 127, 127, 0.25);
+  padding-left: var(--jedi-nest-indent);
+  margin-bottom: var(--jedi-field-gap);
+}
+.jedi-density table td,
+.jedi-density table th {
+  padding: var(--jedi-row-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+}
+`
+
+export function injectDensityStyles (doc) {
+  const target = doc ?? (typeof document !== 'undefined' ? document : undefined)
+
+  if (!target || target.getElementById(STYLE_ID)) {
+    return
+  }
+
+  const style = target.createElement('style')
+  style.setAttribute('id', STYLE_ID)
+  style.textContent = STYLE_TEXT
+  target.head.appendChild(style)
+}
+
+/**
+ * Applies a density to a container: the marker class, the tokens as inline
+ * custom properties, and the stylesheet that reads them.
+ *
+ * Works with any theme, because nothing here depends on one.
+ */
+export function applyDensity (container, level = 'comfortable') {
+  if (!container) {
+    return
+  }
+
+  injectDensityStyles(container.ownerDocument)
+
+  container.classList.add('jedi-density')
+  container.setAttribute('data-jedi-density', level)
+
+  for (const [name, value] of Object.entries(densityTokens(level))) {
+    container.style.setProperty(name, value)
+  }
+}
+
 /**
  * How many of the twelve grid columns a property should take.
  *
  * Short values pack several to a row, long text and nested structures take a
- * full one. Deriving this from the schema is what keeps a form from being a
- * single column of half-empty inputs on a wide screen.
+ * full one. `tight` packs harder, and is independent of the skin.
  */
-export function columnsFor (schema, density = 'compact') {
+export function columnsFor (schema, tight = false) {
   if (!isObject(schema)) {
     return 12
   }
@@ -57,26 +197,16 @@ export function columnsFor (schema, density = 'compact') {
     return 12
   }
 
-  if (type === 'boolean') {
-    return density === 'dense' ? 3 : 4
-  }
-
-  if (isArray(schema.enum)) {
-    return density === 'dense' ? 3 : 4
-  }
-
-  if (type === 'number' || type === 'integer') {
-    return density === 'dense' ? 3 : 4
+  if (type === 'boolean' || isArray(schema.enum) || type === 'number' || type === 'integer') {
+    return tight ? 3 : 4
   }
 
   if (type === 'string') {
-    const long = isSet(schema.maxLength) && schema.maxLength > 120
-
-    if (long) {
+    if (isSet(schema.maxLength) && schema.maxLength > 120) {
       return 12
     }
 
-    return density === 'dense' ? 4 : 6
+    return tight ? 4 : 6
   }
 
   return 12
@@ -85,23 +215,21 @@ export function columnsFor (schema, density = 'compact') {
 /**
  * Assigns a grid to each object, leaving alone any schema that states its own.
  *
- * An object with a single property gains nothing from a grid, and one whose
- * properties all want the full width would only be given twelve columns each,
- * so neither is touched.
+ * Opt-in and independent of density: how many columns a form uses is a
+ * decision about the schema, and a schema author who has made that decision
+ * should not have it overwritten because the skin changed.
  */
 export function assignGrid (schema, options = {}) {
-  const density = options.density ?? 'compact'
-
-  if (density === 'comfortable') {
+  if (options.enabled !== true) {
     return schema
   }
 
-  return walk(schema, density)
+  return walk(schema, options.tight === true)
 }
 
-function walk (node, density) {
+function walk (node, tight) {
   if (isArray(node)) {
-    return node.map((entry) => walk(entry, density))
+    return node.map((entry) => walk(entry, tight))
   }
 
   if (!isObject(node)) {
@@ -111,7 +239,7 @@ function walk (node, density) {
   const result = {}
 
   for (const [key, value] of Object.entries(node)) {
-    result[key] = walk(value, density)
+    result[key] = walk(value, tight)
   }
 
   if (!isObject(result.properties)) {
@@ -121,9 +249,7 @@ function walk (node, density) {
   // The grid layout is selected by x-format on the object. A schema that
   // already states a layout keeps it, since categories, nav and accordion are
   // deliberate choices rather than defaults to improve on.
-  const statedFormat = result['x-format'] ?? result['x-options']?.format
-
-  if (isSet(statedFormat)) {
+  if (isSet(result['x-format']) || isSet(result['x-options']?.format)) {
     return result
   }
 
@@ -137,7 +263,7 @@ function walk (node, density) {
   let anyNarrow = false
 
   for (const name of names) {
-    const width = columnsFor(result.properties[name], density)
+    const width = columnsFor(result.properties[name], tight)
     columns[name] = width
 
     if (width < 12) {
@@ -154,11 +280,7 @@ function walk (node, density) {
   for (const name of names) {
     const property = result.properties[name]
 
-    if (!isObject(property)) {
-      continue
-    }
-
-    if (isSet(property['x-grid']) || isSet(property['x-gridColumns'])) {
+    if (!isObject(property) || isSet(property['x-grid']) || isSet(property['x-gridColumns'])) {
       continue
     }
 

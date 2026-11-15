@@ -6,11 +6,18 @@ import { rebase } from './preprocess/rebase.js'
 import EditorOoldRange from './editors/range.js'
 import EditorOoldAutocomplete from './editors/autocomplete.js'
 import EditorOoldTreeSelect from './editors/tree-select.js'
+import EditorOoldTreeSelectWunderbaum from './editors/tree-select-wunderbaum.js'
 import { InlineCreateHost } from './ui/inline-create.js'
-import { assignGrid, densityOptions } from './density.js'
-import { applyDensityClass } from './theme-compact.js'
+import { assignGrid, densityOptions, applyDensity } from './density.js'
 
-export const OOLD_EDITORS = [EditorOoldRange, EditorOoldAutocomplete, EditorOoldTreeSelect]
+// Wunderbaum first: it resolves only when the host page has loaded it, and
+// falls through to the themed rows when it has not.
+export const OOLD_EDITORS = [
+  EditorOoldTreeSelectWunderbaum,
+  EditorOoldTreeSelect,
+  EditorOoldRange,
+  EditorOoldAutocomplete
+]
 
 /**
  * Resolves an OO-LD document and turns it into a schema jedison renders.
@@ -35,7 +42,11 @@ export async function prepareSchema (schema, options = {}) {
   refParser.expandRecursive(based)
 
   const { schema: form, collected } = preprocess(based, options)
-  const laidOut = assignGrid(form, { density: options.density ?? 'comfortable' })
+  // Grid is a schema decision and stays opt-in, independent of the skin.
+  const laidOut = assignGrid(form, {
+    enabled: options.autoGrid === true,
+    tight: options.density === 'dense'
+  })
 
   return { schema: laidOut, collected, refParser }
 }
@@ -99,11 +110,7 @@ export async function createOoldEditor (options = {}) {
     })
   }
 
-  applyDensityClass(options.container, density)
-
-  if (jedison.theme && typeof jedison.theme.injectStyles === 'function') {
-    jedison.theme.injectStyles()
-  }
+  applyDensity(options.container, density)
 
   jedison.oold = oold
 

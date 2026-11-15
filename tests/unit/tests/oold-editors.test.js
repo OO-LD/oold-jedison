@@ -9,7 +9,8 @@ const {
   OOLD_EDITORS,
   EditorOoldRange,
   EditorOoldAutocomplete,
-  EditorOoldTreeSelect
+  EditorOoldTreeSelect,
+  EditorOoldTreeSelectWunderbaum
 } = Jedison.oold
 
 const { createStaticBackend } = backendApi
@@ -309,8 +310,22 @@ describe('tree controller', () => {
 })
 
 describe('editor registration', () => {
-  it('exports the three editors', () => {
-    expect(OOLD_EDITORS).toHaveLength(3)
+  it('exports the editors, tree variants before the rest', () => {
+    expect(OOLD_EDITORS.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('keeps the wunderbaum tree inert until the page loads the library', () => {
+    const schema = { type: 'string', 'x-format': 'oold-tree-select' }
+
+    // No window.mar10 in this environment, so the themed fallback resolves.
+    expect(EditorOoldTreeSelectWunderbaum.available()).toBe(false)
+    expect(EditorOoldTreeSelectWunderbaum.resolves(schema)).toBe(false)
+    expect(EditorOoldTreeSelect.resolves(schema)).toBe(true)
+  })
+
+  it('ranks the wunderbaum tree above the themed fallback', () => {
+    expect(EditorOoldTreeSelectWunderbaum.priority())
+      .toBeGreaterThan(EditorOoldTreeSelect.priority())
   })
 
   it('resolves a range property to the reference editor', () => {

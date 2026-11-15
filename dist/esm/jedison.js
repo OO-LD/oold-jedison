@@ -15995,14 +15995,15 @@ class EditorOoldTreeSelect extends EditorString {
     const itemSchema2 = this.multiple && isSet(schema.items) ? schema.items : schema;
     const spec = getRangeSpec(itemSchema2) ?? { classes: [] };
     this.backend = oold2.backend;
-    this.control = this.theme.getObjectControl ? this.theme.getInputControl({
+    this.control = this.theme.getInputControl({
       title: this.getTitle(),
       description: this.getDescription(),
       type: "hidden",
       id: this.getIdFromPath(this.instance.path),
       titleHidden: getSchemaXOption(schema, "titleHidden"),
       info: this.getInfo()
-    }) : this.theme.getInputControl({ title: this.getTitle(), type: "hidden", id: this.getIdFromPath(this.instance.path) });
+    });
+    this.control.input.classList.add("jedi-hidden-input");
     this.controller = new TreeController({
       backend: this.backend,
       rootClasses: spec.classes,
@@ -16011,12 +16012,9 @@ class EditorOoldTreeSelect extends EditorString {
       showAncestors: oold2.hideAncestors !== true,
       language: oold2.language
     });
-    this.tree = document.createElement("ul");
-    this.tree.classList.add("jedi-oold-tree");
+    this.tree = document.createElement("div");
+    this.tree.classList.add("jedi-oold-tree", "list-group");
     this.tree.setAttribute("role", "tree");
-    this.tree.style.listStyle = "none";
-    this.tree.style.margin = "0";
-    this.tree.style.paddingLeft = "0";
     this.control.container.insertBefore(this.tree, this.control.description);
     this.controller.on("change", (snapshot) => this.renderTree(snapshot));
     this.controller.init();
@@ -16026,8 +16024,8 @@ class EditorOoldTreeSelect extends EditorString {
     const expanded = new Set(snapshot.expanded);
     const selected = new Set(snapshot.selected);
     const roots = this.controller.rootClasses;
-    this.tree.textContent = "";
     const seen = /* @__PURE__ */ new Set();
+    this.tree.textContent = "";
     const renderNode = (id, depth) => {
       if (seen.has(id)) {
         return;
@@ -16037,40 +16035,7 @@ class EditorOoldTreeSelect extends EditorString {
       if (!node) {
         return;
       }
-      const item = document.createElement("li");
-      item.setAttribute("role", "treeitem");
-      item.setAttribute("data-oold-node", id);
-      item.style.paddingLeft = `${depth * 1}rem`;
-      item.style.display = "flex";
-      item.style.alignItems = "center";
-      item.style.gap = ".25rem";
-      if (node.kind === "class") {
-        const toggle = document.createElement("button");
-        toggle.setAttribute("type", "button");
-        toggle.classList.add("jedi-oold-tree-toggle");
-        toggle.textContent = node.loading ? "..." : expanded.has(id) ? "-" : "+";
-        toggle.addEventListener("click", () => this.controller.toggle(id));
-        item.appendChild(toggle);
-      }
-      const picker = document.createElement(this.multiple ? "input" : "button");
-      if (this.multiple) {
-        picker.setAttribute("type", "checkbox");
-        picker.checked = selected.has(id);
-        picker.addEventListener("change", () => this.pick(id));
-      } else {
-        picker.setAttribute("type", "button");
-        picker.classList.add("jedi-oold-tree-select");
-        picker.textContent = node.label ?? id;
-        picker.style.fontWeight = selected.has(id) ? "700" : "400";
-        picker.addEventListener("click", () => this.pick(id));
-      }
-      item.appendChild(picker);
-      if (this.multiple) {
-        const label = document.createElement("label");
-        label.textContent = node.label ?? id;
-        item.appendChild(label);
-      }
-      this.tree.appendChild(item);
+      this.tree.appendChild(this.renderRow(node, depth, expanded, selected));
       if (expanded.has(id) && isArray(node.children)) {
         for (const child of node.children) {
           renderNode(child, depth + 1);
@@ -16080,6 +16045,75 @@ class EditorOoldTreeSelect extends EditorString {
     for (const root of roots) {
       renderNode(root, 0);
     }
+  }
+  renderRow(node, depth, expanded, selected) {
+    const isSelected = selected.has(node.id);
+    const row = document.createElement("div");
+    row.classList.add("list-group-item", "jedi-oold-tree-row", "d-flex", "align-items-center", "gap-2");
+    row.setAttribute("role", "treeitem");
+    row.setAttribute("data-oold-node", node.id);
+    row.setAttribute("data-oold-kind", node.kind);
+    row.setAttribute("aria-selected", String(isSelected));
+    row.style.paddingLeft = `${0.75 + depth * 1.25}rem`;
+    if (isSelected) {
+      row.classList.add("active");
+    }
+    row.appendChild(this.renderToggle(node, expanded));
+    row.appendChild(this.renderPicker(node, isSelected));
+    return row;
+  }
+  renderToggle(node, expanded) {
+    if (node.kind !== "class") {
+      const spacer = document.createElement("span");
+      spacer.classList.add("jedi-oold-tree-spacer");
+      spacer.style.display = "inline-block";
+      spacer.style.width = "1.75rem";
+      return spacer;
+    }
+    const open = expanded.has(node.id);
+    const toggle = this.theme.getButton({
+      content: open ? "Collapse" : "Expand",
+      icon: node.loading ? "switcher" : open ? "collapse" : "expand"
+    });
+    toggle.classList.add("jedi-oold-tree-toggle", "btn-sm");
+    toggle.setAttribute("always-enabled", "");
+    toggle.setAttribute("aria-expanded", String(open));
+    this.theme.visuallyHidden(toggle.querySelector("span"));
+    if (node.loading) {
+      toggle.setAttribute("disabled", "disabled");
+    }
+    toggle.addEventListener("click", () => this.controller.toggle(node.id));
+    return toggle;
+  }
+  renderPicker(node, isSelected) {
+    const label = node.label ?? node.id;
+    if (!this.multiple) {
+      const picker = document.createElement("button");
+      picker.setAttribute("type", "button");
+      picker.classList.add("jedi-oold-tree-select", "btn", "btn-link", "p-0", "text-decoration-none");
+      picker.setAttribute("always-enabled", "");
+      picker.textContent = label;
+      if (node.kind === "instance") {
+        picker.classList.add("fst-italic");
+      }
+      picker.addEventListener("click", () => this.pick(node.id));
+      return picker;
+    }
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("form-check", "m-0");
+    const input = document.createElement("input");
+    input.setAttribute("type", "checkbox");
+    input.classList.add("form-check-input", "jedi-oold-tree-check");
+    input.setAttribute("id", `${this.getIdFromPath(this.instance.path)}-${encodeURIComponent(node.id)}`);
+    input.checked = isSelected;
+    input.addEventListener("change", () => this.pick(node.id));
+    const text = document.createElement("label");
+    text.classList.add("form-check-label");
+    text.setAttribute("for", input.getAttribute("id"));
+    text.textContent = label;
+    wrapper.appendChild(input);
+    wrapper.appendChild(text);
+    return wrapper;
   }
   pick(id) {
     const value = this.controller.select(id);
@@ -16099,16 +16133,203 @@ class EditorOoldTreeSelect extends EditorString {
     super.destroy();
   }
 }
+class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
+  static resolves(schema) {
+    if (getSchemaXOption(schema, "oold-tree-widget") === "basic") {
+      return false;
+    }
+    return EditorOoldTreeSelect.resolves(schema) && EditorOoldTreeSelectWunderbaum.available();
+  }
+  static available() {
+    return Boolean(typeof window !== "undefined" && window.mar10 && window.mar10.Wunderbaum);
+  }
+  static priority() {
+    return 120;
+  }
+  /**
+   * Label plus the metadata columns. `*` is Wunderbaum's node-title column.
+   */
+  static defaultColumns() {
+    return [
+      { id: "*", title: "Class", width: "20rem" },
+      { id: "kind", title: "Kind", width: "6rem" },
+      { id: "id", title: "Identifier", width: "*" }
+    ];
+  }
+  build() {
+    super.build();
+    this.tree.textContent = "";
+    this.tree.classList.remove("list-group");
+    this.tree.classList.add("wb-skeleton", "jedi-oold-tree-wb");
+    this.tree.style.minHeight = "12rem";
+    this.buildSearch();
+    this.buildWunderbaum();
+  }
+  buildSearch() {
+    if (getSchemaXOption(this.instance.schema, "oold-tree-search") === false) {
+      return;
+    }
+    const search = document.createElement("input");
+    search.setAttribute("type", "search");
+    search.classList.add("form-control", "jedi-oold-tree-search");
+    search.setAttribute("placeholder", "Filter");
+    search.addEventListener("input", () => {
+      if (!this.wunderbaum) {
+        return;
+      }
+      if (search.value === "") {
+        this.wunderbaum.clearFilter();
+        return;
+      }
+      this.wunderbaum.filterNodes(search.value, { mode: "dim", fuzzy: false });
+    });
+    this.control.container.insertBefore(search, this.tree);
+    this.search = search;
+  }
+  buildWunderbaum() {
+    const columns = getSchemaXOption(this.instance.schema, "oold-tree-columns") ?? EditorOoldTreeSelectWunderbaum.defaultColumns();
+    const options = {
+      element: this.tree,
+      id: `${this.getIdFromPath(this.instance.path)}-wb`,
+      selectMode: this.multiple ? "multi" : "single",
+      checkbox: this.multiple,
+      filter: { mode: "dim", autoApply: true },
+      source: (event) => this.loadRoots(event),
+      lazyLoad: (event) => this.loadChildren(event),
+      ...getSchemaXOption(this.instance.schema, "oold-wunderbaum") ?? {}
+    };
+    if (isArray(columns) && columns.length > 1) {
+      options.columns = columns;
+    }
+    if (this.multiple) {
+      options.select = () => this.syncFromTree();
+    } else {
+      options.activate = () => this.syncFromTree();
+    }
+    this.wunderbaum = new window.mar10.Wunderbaum(options);
+  }
+  /**
+   * Wunderbaum node shape. `lazy` is what makes it ask for children later,
+   * so an instance, which has none, is not given an expander.
+   */
+  toNode(entry) {
+    return {
+      key: entry.id,
+      title: entry.label ?? entry.id,
+      lazy: entry.kind === "class",
+      type: entry.kind,
+      kind: entry.kind === "class" ? "Class" : "Instance",
+      id: entry.id
+    };
+  }
+  nodesFor(ids) {
+    const snapshot = this.controller.snapshot();
+    const byId = new Map(snapshot.nodes.map((entry) => [entry.id, entry]));
+    return (isArray(ids) ? ids : []).map((id) => this.toNode(byId.get(id) ?? { id, label: id, kind: "class" }));
+  }
+  async loadRoots() {
+    return this.nodesFor(await this.controller.init());
+  }
+  async loadChildren(event) {
+    const key = event && event.node ? event.node.key : void 0;
+    if (!isSet(key)) {
+      return [];
+    }
+    return this.nodesFor(await this.controller.expand(key));
+  }
+  /**
+   * Reads the selection out of the widget rather than tracking it separately,
+   * so the widget stays the source of truth for what the user clicked.
+   */
+  syncFromTree() {
+    if (!this.wunderbaum) {
+      return;
+    }
+    if (this.multiple) {
+      const keys = this.wunderbaum.getSelectedNodes().map((node) => node.key);
+      this.controller.setValue(keys);
+      this.instance.setValue(keys, true, "user");
+      return;
+    }
+    const active = this.wunderbaum.getActiveNode();
+    const key = active ? active.key : "";
+    this.controller.setValue(key);
+    this.instance.setValue(key, true, "user");
+  }
+  /**
+   * The base class re-renders the themed rows on every controller change.
+   * Wunderbaum owns its own DOM, so that is suppressed here.
+   */
+  renderTree() {
+  }
+  refreshUI() {
+    this.refreshDisabledState();
+    if (!this.wunderbaum) {
+      return;
+    }
+    const value = this.instance.getValue();
+    const wanted = (isArray(value) ? value : [value]).filter(Boolean);
+    for (const key of wanted) {
+      const node = this.wunderbaum.findKey(key);
+      if (!node) {
+        continue;
+      }
+      if (this.multiple) {
+        node.setSelected(true);
+      } else {
+        node.setActive(true);
+      }
+    }
+  }
+  destroy() {
+    if (this.wunderbaum && typeof this.wunderbaum.destroy === "function") {
+      this.wunderbaum.destroy();
+    }
+    this.wunderbaum = null;
+    super.destroy();
+  }
+}
+const WUNDERBAUM_CDN = {
+  js: "https://cdn.jsdelivr.net/npm/wunderbaum@0.15.0/dist/wunderbaum.umd.min.js",
+  css: "https://cdn.jsdelivr.net/npm/wunderbaum@0.15.0/dist/wunderbaum.css"
+};
 class InlineCreateHost {
   constructor(options = {}) {
     this.jedison = options.jedison;
     this.backend = options.backend;
     this.createEditor = options.createEditor;
     this.language = options.language ?? "en";
+    this.themeOverride = options.theme;
     this.open = [];
   }
+  /**
+   * The theme may be supplied directly so the host can exist before the editor
+   * does. The editors ask whether a host is present while they build, so one
+   * attached afterwards would leave their buttons hidden.
+   */
   get theme() {
-    return this.jedison.theme;
+    return this.themeOverride ?? (this.jedison ? this.jedison.theme : void 0);
+  }
+  translate(key, fallback) {
+    const translator = this.jedison ? this.jedison.translator : void 0;
+    return (translator ? translator.translate(key) : void 0) ?? fallback;
+  }
+  /**
+   * Reads the human title of a class, falling back to the last path segment.
+   * A menu listing raw schema URLs is not usable.
+   */
+  async classTitle(classRef) {
+    try {
+      const response = await this.backend.schemas.resolve(classRef);
+      if (response && response.ok) {
+        const schema = await response.json();
+        if (schema && isString(schema.title)) {
+          return schema.title;
+        }
+      }
+    } catch (error) {
+    }
+    return String(classRef).split("/").pop().replace(".schema.json", "");
   }
   /**
    * Picks the class to instantiate. With a single target there is nothing to
@@ -16121,18 +16342,15 @@ class InlineCreateHost {
     if (classes.length === 1) {
       return classes[0];
     }
-    return this.promptForClass(classes, anchor);
+    const titles = await Promise.all(classes.map((classRef) => this.classTitle(classRef)));
+    return this.promptForClass(classes, titles, anchor);
   }
-  promptForClass(classes, anchor) {
+  promptForClass(classes, titles, anchor) {
     return new Promise((resolve) => {
       const menu = document.createElement("ul");
-      menu.classList.add("jedi-oold-class-menu", "dropdown-menu");
-      menu.style.display = "block";
+      menu.classList.add("jedi-oold-class-menu", "dropdown-menu", "show");
       menu.style.position = "absolute";
       menu.style.zIndex = "1080";
-      menu.style.listStyle = "none";
-      menu.style.margin = "0";
-      menu.style.padding = ".25rem";
       const close = (value) => {
         menu.remove();
         document.removeEventListener("mousedown", onOutside, true);
@@ -16143,17 +16361,17 @@ class InlineCreateHost {
           close(void 0);
         }
       };
-      for (const classRef of classes) {
+      classes.forEach((classRef, index2) => {
         const item = document.createElement("li");
         const button = document.createElement("button");
         button.setAttribute("type", "button");
         button.classList.add("dropdown-item", "jedi-oold-class-option");
         button.setAttribute("data-oold-class", classRef);
-        button.textContent = classRef;
+        button.textContent = titles[index2] ?? classRef;
         button.addEventListener("click", () => close(classRef));
         item.appendChild(button);
         menu.appendChild(item);
-      }
+      });
       const parent = anchor && anchor.parentNode ? anchor.parentNode : document.body;
       parent.appendChild(menu);
       document.addEventListener("mousedown", onOutside, true);
@@ -16168,7 +16386,7 @@ class InlineCreateHost {
       classRef,
       value: request.value,
       subclassOfRange: request.subclassOfRange,
-      title: classRef
+      title: await this.classTitle(classRef)
     });
   }
   async edit(request = {}) {
@@ -16179,88 +16397,251 @@ class InlineCreateHost {
     if (!loaded) {
       return void 0;
     }
-    const value = request.mode === "copy" ? { ...loaded, id: void 0 } : loaded;
+    const copy = request.mode === "copy";
+    const value = copy ? { ...loaded, id: void 0 } : { ...loaded };
     const classRef = loaded.type ?? (isArray(request.classes) ? request.classes[0] : void 0);
-    return this.openEditor({ classRef, value, title: request.id });
+    if (!classRef) {
+      return void 0;
+    }
+    return this.openEditor({
+      classRef,
+      value,
+      title: copy ? `${this.translate("oold.clone", "Clone")}: ${loaded.label ?? request.id}` : `${this.translate("oold.edit", "Edit")}: ${loaded.label ?? request.id}`
+    });
   }
   /**
    * Builds a dialog around a nested jedison instance and resolves with the
    * saved record, or undefined when the user cancels.
+   *
+   * getDialog returns a bare <dialog>, which stays invisible until showModal
+   * is called, so children go straight on it and it is opened explicitly.
    */
   openEditor(request) {
     return new Promise((resolve) => {
       const dialog = this.theme.getDialog();
-      const body = dialog.content ?? dialog.container ?? dialog;
+      dialog.classList.add("jedi-oold-dialog");
+      dialog.style.minWidth = "min(44rem, 90vw)";
+      const header = document.createElement("div");
+      header.classList.add("jedi-modal-title", "jedi-oold-dialog-title");
+      header.textContent = request.title ?? "";
       const host = document.createElement("div");
-      body.appendChild(host);
-      document.body.appendChild(dialog.container ?? dialog);
+      host.classList.add("jedi-oold-dialog-body");
+      const actions = document.createElement("div");
+      actions.classList.add("jedi-oold-dialog-actions");
+      actions.style.display = "flex";
+      actions.style.gap = ".5rem";
+      actions.style.justifyContent = "flex-end";
+      actions.style.marginTop = ".75rem";
       let nested;
+      let settled = false;
       const finish = (result) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
         if (nested && typeof nested.destroy === "function") {
           nested.destroy();
         }
-        const root = dialog.container ?? dialog;
-        if (root.parentNode) {
-          root.parentNode.removeChild(root);
+        if (dialog.open) {
+          dialog.close();
         }
-        this.open.pop();
+        if (dialog.parentNode) {
+          dialog.parentNode.removeChild(dialog);
+        }
+        const index2 = this.open.indexOf(dialog);
+        if (index2 !== -1) {
+          this.open.splice(index2, 1);
+        }
         resolve(result);
       };
-      const actions = document.createElement("div");
-      actions.classList.add("jedi-oold-dialog-actions");
-      const cancel = this.theme.getButton({ content: "Cancel", icon: "close" });
+      const cancel = this.theme.getButton({
+        content: this.translate("oold.cancel", "Cancel"),
+        icon: "close"
+      });
       cancel.classList.add("jedi-oold-cancel");
+      cancel.setAttribute("always-enabled", "");
       cancel.addEventListener("click", () => finish(void 0));
-      const save = this.theme.getButton({ content: "Save", icon: "save" });
+      const save = this.theme.getButton({
+        content: this.translate("oold.save", "Save"),
+        icon: "save"
+      });
       save.classList.add("jedi-oold-save");
+      save.setAttribute("always-enabled", "");
       save.addEventListener("click", async () => {
         const entity = nested ? nested.getValue() : request.value;
-        const saved = await this.backend.instances.save(entity);
+        const withType = { type: request.classRef, ...entity };
+        if (request.subclassOfRange) {
+          withType.subclass_of = request.subclassOfRange;
+        }
+        const saved = await this.backend.instances.save(withType);
         if (!saved || !saved.id) {
           finish(void 0);
           return;
         }
-        const label = (entity == null ? void 0 : entity.label) ?? (entity == null ? void 0 : entity.name) ?? saved.id;
-        finish({ id: saved.id, label, raw: entity });
+        const label = withType.label ?? withType.name ?? saved.id;
+        finish({ id: saved.id, label, raw: withType });
       });
+      dialog.addEventListener("cancel", (event) => {
+        event.preventDefault();
+        finish(void 0);
+      });
+      dialog.appendChild(header);
+      dialog.appendChild(host);
       actions.appendChild(cancel);
       actions.appendChild(save);
-      body.appendChild(actions);
+      dialog.appendChild(actions);
+      document.body.appendChild(dialog);
       this.open.push(dialog);
+      dialog.showModal();
       Promise.resolve(this.createEditor({ container: host, classRef: request.classRef, value: request.value })).then((editor) => {
         nested = editor;
-      }).catch(() => finish(void 0));
+      }).catch((error) => {
+        console.error("oold: nested editor failed", error);
+        finish(void 0);
+      });
     });
   }
   destroy() {
-    for (const dialog of this.open) {
-      const root = dialog.container ?? dialog;
-      if (root && root.parentNode) {
-        root.parentNode.removeChild(root);
+    for (const dialog of [...this.open]) {
+      if (dialog.open) {
+        dialog.close();
+      }
+      if (dialog.parentNode) {
+        dialog.parentNode.removeChild(dialog);
       }
     }
     this.open = [];
   }
 }
 const DENSITIES = ["comfortable", "compact", "dense"];
-const DENSITY_OPTIONS = {
-  comfortable: {},
+const DENSITY_TOKENS = {
+  comfortable: {
+    "--jedi-control-padding-y": "0.375rem",
+    "--jedi-control-padding-x": "0.75rem",
+    "--jedi-control-font-size": "1rem",
+    "--jedi-control-line-height": "1.5",
+    "--jedi-label-font-size": "1rem",
+    "--jedi-label-margin": "0.5rem",
+    "--jedi-field-gap": "1rem",
+    "--jedi-legend-font-size": "1.25rem",
+    "--jedi-help-font-size": "0.875rem",
+    "--jedi-nest-indent": "1rem",
+    "--jedi-row-padding-y": "0.5rem"
+  },
   compact: {
-    card: false,
-    autoFlat: true,
-    enableCollapseToggle: true
+    "--jedi-control-padding-y": "0.1875rem",
+    "--jedi-control-padding-x": "0.5rem",
+    "--jedi-control-font-size": "0.875rem",
+    "--jedi-control-line-height": "1.35",
+    "--jedi-label-font-size": "0.8125rem",
+    "--jedi-label-margin": "0.125rem",
+    "--jedi-field-gap": "0.5rem",
+    "--jedi-legend-font-size": "0.9375rem",
+    "--jedi-help-font-size": "0.75rem",
+    "--jedi-nest-indent": "0.75rem",
+    "--jedi-row-padding-y": "0.25rem"
   },
   dense: {
-    card: false,
-    autoFlat: true,
-    enableCollapseToggle: true,
-    btnContents: false
+    "--jedi-control-padding-y": "0.0625rem",
+    "--jedi-control-padding-x": "0.375rem",
+    "--jedi-control-font-size": "0.8125rem",
+    "--jedi-control-line-height": "1.2",
+    "--jedi-label-font-size": "0.75rem",
+    "--jedi-label-margin": "0",
+    "--jedi-field-gap": "0.25rem",
+    "--jedi-legend-font-size": "0.875rem",
+    "--jedi-help-font-size": "0.6875rem",
+    "--jedi-nest-indent": "0.5rem",
+    "--jedi-row-padding-y": "0.125rem"
   }
+};
+const DENSITY_OPTIONS = {
+  comfortable: {},
+  compact: { card: false, autoFlat: true },
+  dense: { card: false, autoFlat: true, btnContents: false }
 };
 function densityOptions(density2) {
   return DENSITY_OPTIONS[density2] ?? DENSITY_OPTIONS.comfortable;
 }
-function columnsFor(schema, density2 = "compact") {
+function densityTokens(density2) {
+  return DENSITY_TOKENS[density2] ?? DENSITY_TOKENS.comfortable;
+}
+const STYLE_ID = "jedi-density";
+const STYLE_TEXT = `
+.jedi-density input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+.jedi-density select,
+.jedi-density textarea {
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+  line-height: var(--jedi-control-line-height);
+  min-height: 0;
+}
+.jedi-density label,
+.jedi-density .form-check-label {
+  font-size: var(--jedi-label-font-size);
+  margin-bottom: var(--jedi-label-margin);
+}
+.jedi-density legend,
+.jedi-density .jedi-legend {
+  font-size: var(--jedi-legend-font-size);
+  margin-bottom: var(--jedi-label-margin);
+}
+.jedi-density small,
+.jedi-density .form-text,
+.jedi-density .jedi-description {
+  font-size: var(--jedi-help-font-size);
+}
+.jedi-density .mb-3 {
+  margin-bottom: var(--jedi-field-gap) !important;
+}
+.jedi-density .jedi-editor-container > .jedi-editor-container {
+  margin-bottom: var(--jedi-field-gap);
+}
+.jedi-density button {
+  font-size: var(--jedi-control-font-size);
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+}
+.jedi-density .list-group-item {
+  padding-top: var(--jedi-row-padding-y);
+  padding-bottom: var(--jedi-row-padding-y);
+  font-size: var(--jedi-control-font-size);
+}
+.jedi-density .jedi-oold-actions button {
+  padding: var(--jedi-control-padding-y) calc(var(--jedi-control-padding-x) / 1.5);
+}
+.jedi-density fieldset:not(.card) {
+  border-left: 2px solid rgba(127, 127, 127, 0.25);
+  padding-left: var(--jedi-nest-indent);
+  margin-bottom: var(--jedi-field-gap);
+}
+.jedi-density table td,
+.jedi-density table th {
+  padding: var(--jedi-row-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+}
+`;
+function injectDensityStyles(doc) {
+  const target = doc ?? (typeof document !== "undefined" ? document : void 0);
+  if (!target || target.getElementById(STYLE_ID)) {
+    return;
+  }
+  const style = target.createElement("style");
+  style.setAttribute("id", STYLE_ID);
+  style.textContent = STYLE_TEXT;
+  target.head.appendChild(style);
+}
+function applyDensity(container, level = "comfortable") {
+  if (!container) {
+    return;
+  }
+  injectDensityStyles(container.ownerDocument);
+  container.classList.add("jedi-density");
+  container.setAttribute("data-jedi-density", level);
+  for (const [name, value] of Object.entries(densityTokens(level))) {
+    container.style.setProperty(name, value);
+  }
+}
+function columnsFor(schema, tight = false) {
   if (!isObject$1(schema)) {
     return 12;
   }
@@ -16273,48 +16654,39 @@ function columnsFor(schema, density2 = "compact") {
   if (type2 === "object" || type2 === "array") {
     return 12;
   }
-  if (type2 === "boolean") {
-    return density2 === "dense" ? 3 : 4;
-  }
-  if (isArray(schema.enum)) {
-    return density2 === "dense" ? 3 : 4;
-  }
-  if (type2 === "number" || type2 === "integer") {
-    return density2 === "dense" ? 3 : 4;
+  if (type2 === "boolean" || isArray(schema.enum) || type2 === "number" || type2 === "integer") {
+    return tight ? 3 : 4;
   }
   if (type2 === "string") {
-    const long = isSet(schema.maxLength) && schema.maxLength > 120;
-    if (long) {
+    if (isSet(schema.maxLength) && schema.maxLength > 120) {
       return 12;
     }
-    return density2 === "dense" ? 4 : 6;
+    return tight ? 4 : 6;
   }
   return 12;
 }
 function assignGrid(schema, options = {}) {
-  const density2 = options.density ?? "compact";
-  if (density2 === "comfortable") {
+  if (options.enabled !== true) {
     return schema;
   }
-  return walk(schema, density2);
+  return walk(schema, options.tight === true);
 }
-function walk(node, density2) {
+function walk(node, tight) {
   var _a;
   if (isArray(node)) {
-    return node.map((entry) => walk(entry, density2));
+    return node.map((entry) => walk(entry, tight));
   }
   if (!isObject$1(node)) {
     return node;
   }
   const result = {};
   for (const [key, value] of Object.entries(node)) {
-    result[key] = walk(value, density2);
+    result[key] = walk(value, tight);
   }
   if (!isObject$1(result.properties)) {
     return result;
   }
-  const statedFormat = result["x-format"] ?? ((_a = result["x-options"]) == null ? void 0 : _a.format);
-  if (isSet(statedFormat)) {
+  if (isSet(result["x-format"]) || isSet((_a = result["x-options"]) == null ? void 0 : _a.format)) {
     return result;
   }
   const names = Object.keys(result.properties);
@@ -16324,7 +16696,7 @@ function walk(node, density2) {
   const columns = {};
   let anyNarrow = false;
   for (const name of names) {
-    const width = columnsFor(result.properties[name], density2);
+    const width = columnsFor(result.properties[name], tight);
     columns[name] = width;
     if (width < 12) {
       anyNarrow = true;
@@ -16336,10 +16708,7 @@ function walk(node, density2) {
   result["x-format"] = "grid";
   for (const name of names) {
     const property = result.properties[name];
-    if (!isObject$1(property)) {
-      continue;
-    }
-    if (isSet(property["x-grid"]) || isSet(property["x-gridColumns"])) {
+    if (!isObject$1(property) || isSet(property["x-grid"]) || isSet(property["x-gridColumns"])) {
       continue;
     }
     result.properties[name] = {
@@ -16353,99 +16722,20 @@ const density = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePrope
   __proto__: null,
   DENSITIES,
   DENSITY_OPTIONS,
+  DENSITY_TOKENS,
+  applyDensity,
   assignGrid,
   columnsFor,
-  densityOptions
+  densityOptions,
+  densityTokens,
+  injectDensityStyles
 }, Symbol.toStringTag, { value: "Module" }));
-class ThemeOoldCompact extends ThemeBootstrap5 {
-  constructor(icons = null, options = {}) {
-    super(icons);
-    this.density = options.density ?? "compact";
-    this.styleInjected = false;
-  }
-  get isDense() {
-    return this.density === "dense";
-  }
-  /**
-   * Injected once rather than shipped as a stylesheet, so the theme stays a
-   * drop-in with no build step for the consumer.
-   */
-  injectStyles(doc) {
-    const target = doc ?? (typeof document !== "undefined" ? document : void 0);
-    if (!target || this.styleInjected || target.getElementById("jedi-oold-compact")) {
-      this.styleInjected = true;
-      return;
-    }
-    const style = target.createElement("style");
-    style.setAttribute("id", "jedi-oold-compact");
-    style.textContent = `
-.jedi-oold-compact .mb-3 { margin-bottom: .5rem !important; }
-.jedi-oold-compact label { margin-bottom: .125rem; font-size: .875rem; }
-.jedi-oold-compact .form-text { font-size: .75rem; margin-top: .125rem; }
-.jedi-oold-compact fieldset > legend { font-size: .9375rem; margin-bottom: .25rem; }
-.jedi-oold-compact fieldset:not(.card) {
-  border-left: 2px solid rgba(0,0,0,.08);
-  padding-left: .75rem;
-  margin-bottom: .5rem;
-}
-.jedi-oold-compact .jedi-oold-actions { padding: 0 .25rem; }
-.jedi-oold-compact .jedi-oold-actions .jedi-btn { padding: .125rem .375rem; }
-.jedi-oold-dense .mb-3 { margin-bottom: .25rem !important; }
-.jedi-oold-dense label { font-size: .8125rem; }
-.jedi-oold-dense .form-control, .jedi-oold-dense .form-select {
-  padding: .125rem .375rem;
-  font-size: .8125rem;
-}
-`;
-    target.head.appendChild(style);
-    this.styleInjected = true;
-  }
-  getInputControl(config) {
-    const control = super.getInputControl(config);
-    this.applyDensity(control.input);
-    return control;
-  }
-  getSelectControl(config) {
-    const control = super.getSelectControl(config);
-    this.applyDensity(control.input);
-    return control;
-  }
-  getTextareaControl(config) {
-    const control = super.getTextareaControl(config);
-    this.applyDensity(control.input);
-    return control;
-  }
-  applyDensity(input) {
-    if (!input || !this.isDense) {
-      return;
-    }
-    if (input.classList.contains("form-select")) {
-      input.classList.add("form-select-sm");
-    } else {
-      input.classList.add("form-control-sm");
-    }
-  }
-  getButton(config) {
-    const button = super.getButton(config);
-    if (this.isDense) {
-      button.classList.add("btn-sm");
-    }
-    return button;
-  }
-}
-function applyDensityClass(container, density2) {
-  if (!container) {
-    return;
-  }
-  container.classList.remove("jedi-oold-compact", "jedi-oold-dense");
-  if (density2 === "compact" || density2 === "dense") {
-    container.classList.add("jedi-oold-compact");
-  }
-  if (density2 === "dense") {
-    container.classList.add("jedi-oold-dense");
-  }
-}
-const OOLD_EDITORS = [EditorOoldRange, EditorOoldAutocomplete, EditorOoldTreeSelect];
+const OOLD_EDITORS = [
+  EditorOoldTreeSelectWunderbaum,
+  EditorOoldTreeSelect,
+  EditorOoldRange,
+  EditorOoldAutocomplete
+];
 async function prepareSchema(schema, options = {}) {
   const based = options.baseUri ? rebase(schema, options.baseUri) : clone(schema);
   const refParser = options.refParser ?? new RefParser({
@@ -16454,7 +16744,10 @@ async function prepareSchema(schema, options = {}) {
   await refParser.dereference(based);
   refParser.expandRecursive(based);
   const { schema: form, collected } = preprocess(based, options);
-  const laidOut = assignGrid(form, { density: options.density ?? "comfortable" });
+  const laidOut = assignGrid(form, {
+    enabled: options.autoGrid === true,
+    tight: options.density === "dense"
+  });
   return { schema: laidOut, collected, refParser };
 }
 async function createOoldEditor(options = {}) {
@@ -16500,12 +16793,40 @@ async function createOoldEditor(options = {}) {
       }
     });
   }
-  applyDensityClass(options.container, density2);
-  if (jedison.theme && typeof jedison.theme.injectStyles === "function") {
-    jedison.theme.injectStyles();
-  }
+  applyDensity(options.container, density2);
   jedison.oold = oold2;
   return jedison;
+}
+function mergeOver(base, overlay) {
+  if (!isObject$1(base)) {
+    return overlay;
+  }
+  if (!isObject$1(overlay)) {
+    return overlay === void 0 ? base : overlay;
+  }
+  const result = { ...base };
+  for (const [key, value] of Object.entries(overlay)) {
+    result[key] = isObject$1(value) && isObject$1(result[key]) ? mergeOver(result[key], value) : value;
+  }
+  return result;
+}
+function restoredPaths(before, after, path = "#") {
+  const paths = [];
+  if (!isObject$1(after)) {
+    return paths;
+  }
+  for (const [key, value] of Object.entries(after)) {
+    const here = `${path}/${key}`;
+    const had = isObject$1(before) ? before[key] : void 0;
+    if (had === void 0 && value !== void 0 && value !== "") {
+      paths.push(here);
+      continue;
+    }
+    if (isObject$1(value)) {
+      paths.push(...restoredPaths(had, value, here));
+    }
+  }
+  return paths;
 }
 class TypeSwitcher {
   constructor(options = {}) {
@@ -16516,6 +16837,7 @@ class TypeSwitcher {
     this.currentClass = options.currentClass;
     this.onSwitch = options.onSwitch;
     this.listeners = {};
+    this.memory = options.memory ?? {};
     this.tree = new TreeController({
       backend: this.backend,
       rootClasses: this.currentClass ? [this.currentClass] : [],
@@ -16551,19 +16873,22 @@ class TypeSwitcher {
    */
   async switchTo(classRef) {
     if (!classRef || classRef === this.currentClass) {
-      return { dropped: [], switched: false };
+      return { dropped: [], restored: [], switched: false };
     }
     const response = await this.backend.schemas.resolve(classRef);
     if (!response || !response.ok) {
       this.emit("error", new Error(`Schema not available: ${classRef}`));
-      return { dropped: [], switched: false };
+      return { dropped: [], restored: [], switched: false };
     }
     const target = await response.json();
     const prepared = this.prepare ? await this.prepare(target, { baseUri: classRef }) : { schema: target };
-    const { dropped } = this.jedison.setSchema(prepared.schema);
+    const current = this.jedison.getValue();
+    this.memory = mergeOver(this.memory, current);
+    const { dropped } = this.jedison.setSchema(prepared.schema, { data: this.memory });
+    const restored = restoredPaths(current, this.jedison.getValue());
     this.currentClass = classRef;
     this.tree.rootClasses = [classRef];
-    const result = { dropped, switched: true, classRef };
+    const result = { dropped, restored, switched: true, classRef };
     this.emit("switch", result);
     if (typeof this.onSwitch === "function") {
       this.onSwitch(result);
@@ -16582,7 +16907,8 @@ class TypeSwitcher {
     }
     const target = await response.json();
     const prepared = this.prepare ? await this.prepare(target, { baseUri: classRef }) : { schema: target };
-    const { dropped } = carryOver(this.jedison.getValue(), prepared.schema);
+    const merged = mergeOver(this.memory, this.jedison.getValue());
+    const { dropped } = carryOver(merged, prepared.schema);
     return { dropped, available: true, schema: prepared.schema };
   }
   snapshot() {
@@ -16601,18 +16927,20 @@ const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty
   EditorOoldAutocomplete,
   EditorOoldRange,
   EditorOoldTreeSelect,
+  EditorOoldTreeSelectWunderbaum,
   InlineCreateHost,
   OOLD_EDITORS,
   OoldRefResolver,
   SuggestController,
-  ThemeOoldCompact,
   TreeController,
   TypeSwitcher,
-  applyDensityClass,
+  WUNDERBAUM_CDN,
+  applyDensity,
   backend: index$1,
   constants,
   createOoldEditor,
   density,
+  injectDensityStyles,
   mapUiKeywords,
   mergeAllOf,
   mergeTwo,

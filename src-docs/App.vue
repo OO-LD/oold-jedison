@@ -31,6 +31,19 @@
           </div>
           <div class="col-md-6">
             <div class="form-group mb-3">
+              <label class="d-block">Layout</label>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="oold-auto-grid" v-model="ooldAutoGrid" @change="ooldReload">
+                <label class="form-check-label" for="oold-auto-grid">Auto grid</label>
+              </div>
+              <div class="form-check form-check-inline">
+                <input class="form-check-input" type="checkbox" id="oold-wunderbaum" v-model="ooldWunderbaum" @change="ooldReload">
+                <label class="form-check-label" for="oold-wunderbaum">Wunderbaum tree</label>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group mb-3">
               <label for="oold-class">Switch class</label>
               <select class="form-control" id="oold-class" v-model="ooldClass" @change="ooldSwitchClass(ooldClass)">
                 <option value="">(keep current schema)</option>
@@ -43,6 +56,9 @@
         </div>
         <div class="alert alert-warning" id="oold-dropped" v-if="ooldDropped.length">
           Dropped on switch: <code>{{ ooldDropped.join(', ') }}</code>
+        </div>
+        <div class="alert alert-info" id="oold-restored" v-if="ooldRestored.length">
+          Restored from an earlier class: <code>{{ ooldRestored.join(', ') }}</code>
         </div>
       </div>
     </div>
@@ -719,6 +735,9 @@ export default {
       ooldClass: '',
       ooldClasses: demoClasses(),
       ooldDropped: [],
+      ooldRestored: [],
+      ooldAutoGrid: false,
+      ooldWunderbaum: true,
       showErrors: 'change',
       switcherInput: 'select',
       language: 'en',
@@ -849,6 +868,51 @@ export default {
     }
   },
   methods: {
+    markBasicTree(node) {
+      // resolves() only sees the schema, so opting out of the richer widget
+      // has to be written into the schema rather than passed as an option.
+      if (Array.isArray(node)) {
+        return node.map((entry) => this.markBasicTree(entry))
+      }
+
+      if (!node || typeof node !== 'object') {
+        return node
+      }
+
+      const result = {}
+
+      for (const [key, value] of Object.entries(node)) {
+        result[key] = this.markBasicTree(value)
+      }
+
+      if (result['x-format'] === 'oold-tree-select') {
+        result['x-oold-tree-widget'] = 'basic'
+      }
+
+      return result
+    },
+    ensureWunderbaum() {
+      if (window.mar10 && window.mar10.Wunderbaum) {
+        return Promise.resolve(true)
+      }
+
+      if (!this._wunderbaumLoading) {
+        const { js, css } = Jedison.oold.WUNDERBAUM_CDN
+
+        this.loadStylesheets([css])
+
+        // Capped: a third-party script must not be able to hold up the first
+        // render. Without it the editor falls back to the themed rows.
+        this._wunderbaumLoading = Promise.race([
+          new Promise((resolve) => {
+            this.loadScripts([js], () => resolve(Boolean(window.mar10 && window.mar10.Wunderbaum)))
+          }),
+          new Promise((resolve) => setTimeout(() => resolve(false), 6000))
+        ])
+      }
+
+      return this._wunderbaumLoading
+    },
     buildOoldHost() {
       const backend = this.ooldBackend
       const density = this.ooldDensityLevel
@@ -882,23 +946,45 @@ export default {
       oold.host.jedison = this.editor
       this.editor.oold = oold
     },
+    ooldSwitcher() {
+      // One switcher per editor, so what was entered under a class is still
+      // remembered when that class is chosen again.
+      if (!this._ooldSwitcher || this._ooldSwitcher.jedison !== this.editor) {
+        const memory = this._ooldSwitcher ? this._ooldSwitcher.memory : {}
+
+        this._ooldSwitcher = new Jedison.oold.TypeSwitcher({
+          jedison: this.editor,
+          backend: this.ooldBackend,
+          memory,
+          language: this.language,
+          prepare: (schema, options) => Jedison.oold.prepareSchema(schema, {
+            ...options,
+            backend: this.ooldBackend,
+            language: this.language,
+            density: this.ooldDensityLevel
+          })
+        })
+      }
+
+      return this._ooldSwitcher
+    },
     async ooldSwitchClass(classRef) {
       if (!classRef || !this.editor) {
         return
       }
 
-      const prepared = await Jedison.oold.prepareSchema(classSchema(classRef) || {}, {
-        baseUri: classRef,
-        backend: this.ooldBackend,
-        language: this.language,
-        density: this.ooldDensityLevel
-      })
+      const result = await this.ooldSwitcher().switchTo(classRef)
 
-      const { dropped } = this.editor.setSchema(prepared.schema)
-      this.ooldDropped = dropped
+      this.ooldDropped = result.dropped
+      this.ooldRestored = result.restored
       this.attachOoldHost()
     },
     ooldChangeDensity() {
+      this.initEditor()
+    },
+    ooldReload() {
+      // Never pass the change event through: initEditor reads its first
+      // argument as a schema.
       this.initEditor()
     },
     saveStickySidebar() {
@@ -938,6 +1024,12 @@ export default {
     async initEditor(schema, data) {
       if (this.editor) {
         this.editor.destroy()
+      }
+
+      // The tree editor resolves to Wunderbaum only if the global is already
+      // there, so it has to finish loading before the editor is built.
+      if (this.isOold && this.ooldWunderbaum) {
+        await this.ensureWunderbaum()
       }
 
       // schema
@@ -1088,10 +1180,19 @@ export default {
       // OO-LD: the density preset sets existing options, and the grid is
       // derived from the schema rather than written by hand.
       if (this.isOold) {
+        // Skin and layout are separate: density is CSS, the grid rewrites
+        // the schema, and each is switched on its own.
         Object.assign(options, Jedison.oold.density.densityOptions(this.ooldDensityLevel))
-        options.schema = Jedison.oold.density.assignGrid(options.schema, { density: this.ooldDensityLevel })
+        options.schema = Jedison.oold.density.assignGrid(options.schema, {
+          enabled: this.ooldAutoGrid,
+          tight: this.ooldDensityLevel === 'dense'
+        })
+
+        if (!this.ooldWunderbaum) {
+          options.schema = this.markBasicTree(options.schema)
+        }
         options.keepMissingSchemaFields = true
-        Jedison.oold.applyDensityClass(options.container, this.ooldDensityLevel)
+        Jedison.oold.applyDensity(options.container, this.ooldDensityLevel)
       }
 
       const t1 = window.performance.now()

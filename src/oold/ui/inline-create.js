@@ -1,4 +1,4 @@
-import { isArray } from '../../helpers/utils.js'
+import { isArray, isString } from '../../helpers/utils.js'
 
 /**
  * Opens a nested editor for a referenced entity.
@@ -27,6 +27,33 @@ export class InlineCreateHost {
     return this.themeOverride ?? (this.jedison ? this.jedison.theme : undefined)
   }
 
+  translate (key, fallback) {
+    const translator = this.jedison ? this.jedison.translator : undefined
+    return (translator ? translator.translate(key) : undefined) ?? fallback
+  }
+
+  /**
+   * Reads the human title of a class, falling back to the last path segment.
+   * A menu listing raw schema URLs is not usable.
+   */
+  async classTitle (classRef) {
+    try {
+      const response = await this.backend.schemas.resolve(classRef)
+
+      if (response && response.ok) {
+        const schema = await response.json()
+
+        if (schema && isString(schema.title)) {
+          return schema.title
+        }
+      }
+    } catch (error) {
+      // Falls through to the identifier.
+    }
+
+    return String(classRef).split('/').pop().replace('.schema.json', '')
+  }
+
   /**
    * Picks the class to instantiate. With a single target there is nothing to
    * ask; with several the user chooses before the editor opens.
@@ -40,19 +67,17 @@ export class InlineCreateHost {
       return classes[0]
     }
 
-    return this.promptForClass(classes, anchor)
+    const titles = await Promise.all(classes.map((classRef) => this.classTitle(classRef)))
+
+    return this.promptForClass(classes, titles, anchor)
   }
 
-  promptForClass (classes, anchor) {
+  promptForClass (classes, titles, anchor) {
     return new Promise((resolve) => {
       const menu = document.createElement('ul')
-      menu.classList.add('jedi-oold-class-menu', 'dropdown-menu')
-      menu.style.display = 'block'
+      menu.classList.add('jedi-oold-class-menu', 'dropdown-menu', 'show')
       menu.style.position = 'absolute'
       menu.style.zIndex = '1080'
-      menu.style.listStyle = 'none'
-      menu.style.margin = '0'
-      menu.style.padding = '.25rem'
 
       const close = (value) => {
         menu.remove()
@@ -66,17 +91,17 @@ export class InlineCreateHost {
         }
       }
 
-      for (const classRef of classes) {
+      classes.forEach((classRef, index) => {
         const item = document.createElement('li')
         const button = document.createElement('button')
         button.setAttribute('type', 'button')
         button.classList.add('dropdown-item', 'jedi-oold-class-option')
         button.setAttribute('data-oold-class', classRef)
-        button.textContent = classRef
+        button.textContent = titles[index] ?? classRef
         button.addEventListener('click', () => close(classRef))
         item.appendChild(button)
         menu.appendChild(item)
-      }
+      })
 
       const parent = anchor && anchor.parentNode ? anchor.parentNode : document.body
       parent.appendChild(menu)
@@ -99,7 +124,7 @@ export class InlineCreateHost {
       classRef,
       value: request.value,
       subclassOfRange: request.subclassOfRange,
-      title: classRef
+      title: await this.classTitle(classRef)
     })
   }
 
@@ -114,85 +139,150 @@ export class InlineCreateHost {
       return undefined
     }
 
-    const value = request.mode === 'copy' ? { ...loaded, id: undefined } : loaded
+    const copy = request.mode === 'copy'
+    const value = copy ? { ...loaded, id: undefined } : { ...loaded }
     const classRef = loaded.type ?? (isArray(request.classes) ? request.classes[0] : undefined)
 
-    return this.openEditor({ classRef, value, title: request.id })
+    if (!classRef) {
+      return undefined
+    }
+
+    return this.openEditor({
+      classRef,
+      value,
+      title: copy
+        ? `${this.translate('oold.clone', 'Clone')}: ${loaded.label ?? request.id}`
+        : `${this.translate('oold.edit', 'Edit')}: ${loaded.label ?? request.id}`
+    })
   }
 
   /**
    * Builds a dialog around a nested jedison instance and resolves with the
    * saved record, or undefined when the user cancels.
+   *
+   * getDialog returns a bare <dialog>, which stays invisible until showModal
+   * is called, so children go straight on it and it is opened explicitly.
    */
   openEditor (request) {
     return new Promise((resolve) => {
       const dialog = this.theme.getDialog()
-      const body = dialog.content ?? dialog.container ?? dialog
-      const host = document.createElement('div')
+      dialog.classList.add('jedi-oold-dialog')
+      dialog.style.minWidth = 'min(44rem, 90vw)'
 
-      body.appendChild(host)
-      document.body.appendChild(dialog.container ?? dialog)
+      const header = document.createElement('div')
+      header.classList.add('jedi-modal-title', 'jedi-oold-dialog-title')
+      header.textContent = request.title ?? ''
+
+      const host = document.createElement('div')
+      host.classList.add('jedi-oold-dialog-body')
+
+      const actions = document.createElement('div')
+      actions.classList.add('jedi-oold-dialog-actions')
+      actions.style.display = 'flex'
+      actions.style.gap = '.5rem'
+      actions.style.justifyContent = 'flex-end'
+      actions.style.marginTop = '.75rem'
 
       let nested
+      let settled = false
 
       const finish = (result) => {
+        if (settled) {
+          return
+        }
+
+        settled = true
+
         if (nested && typeof nested.destroy === 'function') {
           nested.destroy()
         }
 
-        const root = dialog.container ?? dialog
-
-        if (root.parentNode) {
-          root.parentNode.removeChild(root)
+        if (dialog.open) {
+          dialog.close()
         }
 
-        this.open.pop()
+        if (dialog.parentNode) {
+          dialog.parentNode.removeChild(dialog)
+        }
+
+        const index = this.open.indexOf(dialog)
+
+        if (index !== -1) {
+          this.open.splice(index, 1)
+        }
+
         resolve(result)
       }
 
-      const actions = document.createElement('div')
-      actions.classList.add('jedi-oold-dialog-actions')
-
-      const cancel = this.theme.getButton({ content: 'Cancel', icon: 'close' })
+      const cancel = this.theme.getButton({
+        content: this.translate('oold.cancel', 'Cancel'),
+        icon: 'close'
+      })
       cancel.classList.add('jedi-oold-cancel')
+      cancel.setAttribute('always-enabled', '')
       cancel.addEventListener('click', () => finish(undefined))
 
-      const save = this.theme.getButton({ content: 'Save', icon: 'save' })
+      const save = this.theme.getButton({
+        content: this.translate('oold.save', 'Save'),
+        icon: 'save'
+      })
       save.classList.add('jedi-oold-save')
+      save.setAttribute('always-enabled', '')
       save.addEventListener('click', async () => {
         const entity = nested ? nested.getValue() : request.value
-        const saved = await this.backend.instances.save(entity)
+        const withType = { type: request.classRef, ...entity }
+
+        if (request.subclassOfRange) {
+          withType.subclass_of = request.subclassOfRange
+        }
+
+        const saved = await this.backend.instances.save(withType)
 
         if (!saved || !saved.id) {
           finish(undefined)
           return
         }
 
-        const label = entity?.label ?? entity?.name ?? saved.id
+        const label = withType.label ?? withType.name ?? saved.id
 
-        finish({ id: saved.id, label, raw: entity })
+        finish({ id: saved.id, label, raw: withType })
       })
 
+      // Escape closes the dialog, and the browser fires cancel for that.
+      dialog.addEventListener('cancel', (event) => {
+        event.preventDefault()
+        finish(undefined)
+      })
+
+      dialog.appendChild(header)
+      dialog.appendChild(host)
       actions.appendChild(cancel)
       actions.appendChild(save)
-      body.appendChild(actions)
+      dialog.appendChild(actions)
 
+      document.body.appendChild(dialog)
       this.open.push(dialog)
+      dialog.showModal()
 
       Promise.resolve(this.createEditor({ container: host, classRef: request.classRef, value: request.value }))
         .then((editor) => {
           nested = editor
         })
-        .catch(() => finish(undefined))
+        .catch((error) => {
+          console.error('oold: nested editor failed', error)
+          finish(undefined)
+        })
     })
   }
 
   destroy () {
-    for (const dialog of this.open) {
-      const root = dialog.container ?? dialog
+    for (const dialog of [...this.open]) {
+      if (dialog.open) {
+        dialog.close()
+      }
 
-      if (root && root.parentNode) {
-        root.parentNode.removeChild(root)
+      if (dialog.parentNode) {
+        dialog.parentNode.removeChild(dialog)
       }
     }
 

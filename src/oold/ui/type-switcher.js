@@ -1,6 +1,58 @@
-import { isArray } from '../../helpers/utils.js'
+import { isArray, isObject } from '../../helpers/utils.js'
 import { carryOver } from '../../helpers/carry-over.js'
 import { TreeController } from './tree-controller.js'
+
+/**
+ * Merges the edited value over what was remembered.
+ *
+ * Objects merge by key so a field the current schema does not define survives
+ * underneath; anything else replaces, because a half-edited array merged
+ * element-wise produces a value the user never typed.
+ */
+function mergeOver (base, overlay) {
+  if (!isObject(base)) {
+    return overlay
+  }
+
+  if (!isObject(overlay)) {
+    return overlay === undefined ? base : overlay
+  }
+
+  const result = { ...base }
+
+  for (const [key, value] of Object.entries(overlay)) {
+    result[key] = isObject(value) && isObject(result[key]) ? mergeOver(result[key], value) : value
+  }
+
+  return result
+}
+
+/**
+ * Keys present after a restore that the editor did not hold before it.
+ */
+function restoredPaths (before, after, path = '#') {
+  const paths = []
+
+  if (!isObject(after)) {
+    return paths
+  }
+
+  for (const [key, value] of Object.entries(after)) {
+    const here = `${path}/${key}`
+    const had = isObject(before) ? before[key] : undefined
+
+    if (had === undefined && value !== undefined && value !== '') {
+      paths.push(here)
+      continue
+    }
+
+    if (isObject(value)) {
+      paths.push(...restoredPaths(had, value, here))
+    }
+  }
+
+  return paths
+}
 
 /**
  * Changes the schema of an open editor.
@@ -20,6 +72,10 @@ export class TypeSwitcher {
     this.currentClass = options.currentClass
     this.onSwitch = options.onSwitch
     this.listeners = {}
+
+    // Everything ever entered, across every class visited. A value dropped
+    // by one switch is still here when a class that defines it comes back.
+    this.memory = options.memory ?? {}
 
     this.tree = new TreeController({
       backend: this.backend,
@@ -61,14 +117,14 @@ export class TypeSwitcher {
    */
   async switchTo (classRef) {
     if (!classRef || classRef === this.currentClass) {
-      return { dropped: [], switched: false }
+      return { dropped: [], restored: [], switched: false }
     }
 
     const response = await this.backend.schemas.resolve(classRef)
 
     if (!response || !response.ok) {
       this.emit('error', new Error(`Schema not available: ${classRef}`))
-      return { dropped: [], switched: false }
+      return { dropped: [], restored: [], switched: false }
     }
 
     const target = await response.json()
@@ -76,12 +132,19 @@ export class TypeSwitcher {
       ? await this.prepare(target, { baseUri: classRef })
       : { schema: target }
 
-    const { dropped } = this.jedison.setSchema(prepared.schema)
+    // What is on screen wins over what was remembered, so an edit is never
+    // overwritten by an older value. Everything else is kept, which is what
+    // makes switching back to a class restore what was entered under it.
+    const current = this.jedison.getValue()
+    this.memory = mergeOver(this.memory, current)
+
+    const { dropped } = this.jedison.setSchema(prepared.schema, { data: this.memory })
+    const restored = restoredPaths(current, this.jedison.getValue())
 
     this.currentClass = classRef
     this.tree.rootClasses = [classRef]
 
-    const result = { dropped, switched: true, classRef }
+    const result = { dropped, restored, switched: true, classRef }
 
     this.emit('switch', result)
 
@@ -109,7 +172,8 @@ export class TypeSwitcher {
       ? await this.prepare(target, { baseUri: classRef })
       : { schema: target }
 
-    const { dropped } = carryOver(this.jedison.getValue(), prepared.schema)
+    const merged = mergeOver(this.memory, this.jedison.getValue())
+    const { dropped } = carryOver(merged, prepared.schema)
 
     return { dropped, available: true, schema: prepared.schema }
   }
