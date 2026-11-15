@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "title": "Autocomplete",
+  "description": "What the dropdown shows and what the form stores are independent. The row renders a label, a description and an image; the stored value is the identifier. Templates escape by default, so a label from a backend cannot inject markup.",
+  "properties": {
+    "organization": {
+      "type": "string",
+      "title": "Organization (stores an identifier)",
+      "x-oold-range": "https://demo.oo-ld.org/schemas/Organization.schema.json",
+      "x-oold-jedison-render-template": "<img src=\"{{image}}\" alt=\"\" style=\"width:1.5rem;height:1.5rem;vertical-align:middle;margin-right:.5rem\"><strong>{{label}}</strong> <small style=\"opacity:.7\">{{description}}</small>",
+      "x-oold-jedison-label-template": "{{label}}"
+    },
+    "unit": {
+      "type": "string",
+      "title": "Unit (static source)",
+      "x-format": "oold-autocomplete",
+      "x-oold-jedison-source": {
+        "items": [
+          {
+            "id": "degC",
+            "label": "Degree Celsius",
+            "description": "Temperature"
+          },
+          {
+            "id": "K",
+            "label": "Kelvin",
+            "description": "Temperature"
+          },
+          {
+            "id": "bar",
+            "label": "Bar",
+            "description": "Pressure"
+          },
+          {
+            "id": "Pa",
+            "label": "Pascal",
+            "description": "Pressure"
+          }
+        ]
+      }
+    }
+  }
+}

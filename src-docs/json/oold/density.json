@@ -1,0 +1,51 @@
+{
+  "type": "object",
+  "title": "Density",
+  "description": "The same schema at each density. Use the Density selector above. At comfortable the form is one field per row; at compact and dense a grid is derived from the property types, full width on a narrow viewport and packed from medium up.",
+  "properties": {
+    "label": {
+      "type": "string",
+      "title": "Label"
+    },
+    "serial": {
+      "type": "string",
+      "title": "Serial"
+    },
+    "active": {
+      "type": "boolean",
+      "title": "Active"
+    },
+    "channels": {
+      "type": "integer",
+      "title": "Channels"
+    },
+    "unit": {
+      "type": "string",
+      "title": "Unit",
+      "enum": [
+        "degC",
+        "K",
+        "bar",
+        "Pa"
+      ]
+    },
+    "accuracy": {
+      "type": "number",
+      "title": "Accuracy"
+    },
+    "vendor": {
+      "type": "string",
+      "title": "Vendor"
+    },
+    "model": {
+      "type": "string",
+      "title": "Model"
+    },
+    "notes": {
+      "type": "string",
+      "title": "Notes",
+      "x-format": "textarea",
+      "maxLength": 2000
+    }
+  }
+}

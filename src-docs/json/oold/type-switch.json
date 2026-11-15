@@ -1,0 +1,34 @@
+{
+  "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+  "$id": "https://demo.oo-ld.org/schemas/Person.schema.json",
+  "@context": [
+    {
+      "ex": "https://demo.oo-ld.org/vocab#"
+    }
+  ],
+  "title": "Type switch",
+  "description": "Fill in some fields, then pick another class in the Switch class selector above. The form reloads against the new schema and keeps every value the new class still defines. Anything it cannot keep is listed rather than dropped silently. Switching Researcher to Thing loses the ORCID; switching back does not bring it back, because it was never stored.",
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "title": "Label"
+    },
+    "description": {
+      "type": "string",
+      "title": "Description"
+    },
+    "email": {
+      "type": "string",
+      "title": "E-mail",
+      "format": "email"
+    },
+    "works_for": {
+      "type": "string",
+      "format": "iri-reference",
+      "title": "Works for",
+      "x-oold-range": "https://demo.oo-ld.org/schemas/Organization.schema.json"
+    }
+  },
+  "unevaluatedProperties": false
+}

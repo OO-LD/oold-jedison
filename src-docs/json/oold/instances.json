@@ -1,0 +1,57 @@
+[
+  {
+    "id": "urn:demo:org-materials",
+    "label": "Institute of Materials",
+    "description": "Materials research institute",
+    "image": "https://api.dicebear.com/7.x/shapes/svg?seed=materials",
+    "type": "https://demo.oo-ld.org/schemas/Organization.schema.json",
+    "homepage": "https://www.isc.materihofer.de"
+  },
+  {
+    "id": "urn:demo:org-physics",
+    "label": "Institute of Physics",
+    "description": "Fundamental research society",
+    "image": "https://api.dicebear.com/7.x/shapes/svg?seed=physics",
+    "type": "https://demo.oo-ld.org/schemas/Organization.schema.json"
+  },
+  {
+    "id": "urn:demo:org-north",
+    "label": "Northern Research Centre",
+    "description": "Accelerator research organisation",
+    "image": "https://api.dicebear.com/7.x/shapes/svg?seed=north",
+    "type": "https://demo.oo-ld.org/schemas/Organization.schema.json"
+  },
+  {
+    "id": "urn:demo:person-ada",
+    "label": "Ada Lovelace",
+    "description": "Mathematician",
+    "type": "https://demo.oo-ld.org/schemas/Person.schema.json",
+    "works_for": "urn:demo:org-materials"
+  },
+  {
+    "id": "urn:demo:person-grace",
+    "label": "Grace Hopper",
+    "description": "Computer scientist",
+    "type": "https://demo.oo-ld.org/schemas/Person.schema.json"
+  },
+  {
+    "id": "urn:demo:res-curie",
+    "label": "Marie Curie",
+    "description": "Physicist and chemist",
+    "type": "https://demo.oo-ld.org/schemas/Researcher.schema.json",
+    "field": "chemistry"
+  },
+  {
+    "id": "urn:demo:sensor-1",
+    "label": "Thermocouple K-1",
+    "description": "Type K thermocouple",
+    "type": "https://demo.oo-ld.org/schemas/Sensor.schema.json",
+    "unit": "degC"
+  },
+  {
+    "id": "urn:demo:sensor-2",
+    "label": "Pressure gauge P-7",
+    "type": "https://demo.oo-ld.org/schemas/Sensor.schema.json",
+    "unit": "bar"
+  }
+]

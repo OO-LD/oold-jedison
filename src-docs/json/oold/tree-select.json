@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "title": "Tree select",
+  "description": "The hierarchy is fetched lazily: children load when a node is expanded, because OO-LD has no children index and discovering them costs a query per class. The first field selects one class, the second selects several.",
+  "properties": {
+    "primary_class": {
+      "type": "string",
+      "title": "Primary class",
+      "x-format": "oold-tree-select",
+      "x-oold-range": "https://demo.oo-ld.org/schemas/Thing.schema.json"
+    },
+    "applies_to": {
+      "type": "array",
+      "title": "Applies to (multi-select)",
+      "x-format": "oold-tree-select",
+      "items": {
+        "type": "string",
+        "x-oold-range": "https://demo.oo-ld.org/schemas/Thing.schema.json"
+      }
+    }
+  }
+}

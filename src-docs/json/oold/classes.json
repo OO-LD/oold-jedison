@@ -1,0 +1,208 @@
+{
+  "Thing": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Thing.schema.json",
+    "x-oold-uuid": "e7c82e80-5dd3-5c15-a936-169ee0fcc3b6",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Thing",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Thing"
+    ],
+    "properties": {
+      "label": {
+        "type": "string",
+        "title": "Label",
+        "x-oold-ui-property-order": 1
+      },
+      "description": {
+        "type": "string",
+        "title": "Description",
+        "x-oold-ui-widget": "textarea",
+        "x-oold-ui-property-order": 2
+      }
+    },
+    "unevaluatedProperties": false
+  },
+  "Organization": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Organization.schema.json",
+    "x-oold-uuid": "aeac55cd-334c-58f2-b5d3-5a48e69ac2c4",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      "Thing.schema.json",
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Organization",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Organization"
+    ],
+    "allOf": [
+      {
+        "$ref": "Thing.schema.json"
+      }
+    ],
+    "properties": {
+      "homepage": {
+        "type": "string",
+        "format": "uri",
+        "title": "Homepage"
+      },
+      "founded": {
+        "type": "integer",
+        "title": "Founded"
+      }
+    },
+    "unevaluatedProperties": false
+  },
+  "Person": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Person.schema.json",
+    "x-oold-uuid": "ec0e9053-d317-5a8d-930b-1398931ea465",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      "Thing.schema.json",
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Person",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Person"
+    ],
+    "allOf": [
+      {
+        "$ref": "Thing.schema.json"
+      }
+    ],
+    "properties": {
+      "works_for": {
+        "type": "string",
+        "format": "iri-reference",
+        "title": "Works for",
+        "x-oold-range": "https://demo.oo-ld.org/schemas/Organization.schema.json",
+        "x-oold-ui-hint": "Pick an organization, or create one without leaving the form."
+      },
+      "email": {
+        "type": "string",
+        "format": "email",
+        "title": "E-mail"
+      }
+    },
+    "unevaluatedProperties": false
+  },
+  "Researcher": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Researcher.schema.json",
+    "x-oold-uuid": "8b17bc7a-55d0-5d1e-b54f-affa897e509f",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      "Person.schema.json",
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Researcher",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Researcher"
+    ],
+    "allOf": [
+      {
+        "$ref": "Person.schema.json"
+      }
+    ],
+    "properties": {
+      "orcid": {
+        "type": "string",
+        "title": "ORCID"
+      },
+      "field": {
+        "type": "string",
+        "title": "Field",
+        "enum": [
+          "physics",
+          "chemistry",
+          "biology"
+        ],
+        "x-oold-ui-enum-titles": [
+          "Physics",
+          "Chemistry",
+          "Biology"
+        ]
+      }
+    },
+    "unevaluatedProperties": false
+  },
+  "Device": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Device.schema.json",
+    "x-oold-uuid": "5e5e1629-770f-565e-b26b-c917cd7d703c",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      "Thing.schema.json",
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Device",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Device"
+    ],
+    "allOf": [
+      {
+        "$ref": "Thing.schema.json"
+      }
+    ],
+    "properties": {
+      "serial": {
+        "type": "string",
+        "title": "Serial number"
+      }
+    },
+    "unevaluatedProperties": false
+  },
+  "Sensor": {
+    "$schema": "https://oo-ld.org/latest/meta/oold-meta-schema.json",
+    "$id": "https://demo.oo-ld.org/schemas/Sensor.schema.json",
+    "x-oold-uuid": "54978f94-1e3e-5924-ab27-6c0d58e3c788",
+    "x-oold-version": "1.0.0",
+    "@context": [
+      "Device.schema.json",
+      {
+        "ex": "https://demo.oo-ld.org/vocab#"
+      }
+    ],
+    "title": "Sensor",
+    "type": "object",
+    "x-oold-instance-rdf-type": [
+      "ex:Sensor"
+    ],
+    "allOf": [
+      {
+        "$ref": "Device.schema.json"
+      }
+    ],
+    "properties": {
+      "unit": {
+        "type": "string",
+        "title": "Unit"
+      },
+      "active": {
+        "type": "boolean",
+        "title": "Active"
+      }
+    },
+    "unevaluatedProperties": false
+  }
+}

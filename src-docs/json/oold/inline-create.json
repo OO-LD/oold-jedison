@@ -1,0 +1,17 @@
+{
+  "type": "object",
+  "title": "Inline create",
+  "description": "`works_for` carries `x-oold-range`, so it is a typed reference rather than free text. Type to search the demo backend, or press the plus to create the target organization without leaving the form. Typing without picking a suggestion leaves the field empty, because a free string is not a reference.",
+  "properties": {
+    "label": {
+      "type": "string",
+      "title": "Name"
+    },
+    "works_for": {
+      "type": "string",
+      "format": "iri-reference",
+      "title": "Works for",
+      "x-oold-range": "https://demo.oo-ld.org/schemas/Organization.schema.json"
+    }
+  }
+}

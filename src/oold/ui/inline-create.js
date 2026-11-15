@@ -14,11 +14,17 @@ export class InlineCreateHost {
     this.backend = options.backend
     this.createEditor = options.createEditor
     this.language = options.language ?? 'en'
+    this.themeOverride = options.theme
     this.open = []
   }
 
+  /**
+   * The theme may be supplied directly so the host can exist before the editor
+   * does. The editors ask whether a host is present while they build, so one
+   * attached afterwards would leave their buttons hidden.
+   */
   get theme () {
-    return this.jedison.theme
+    return this.themeOverride ?? (this.jedison ? this.jedison.theme : undefined)
   }
 
   /**

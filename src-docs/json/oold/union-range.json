@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "title": "Union range",
+  "description": "The range admits more than one class, so the create button asks which one to instantiate before the nested editor opens.",
+  "properties": {
+    "label": {
+      "type": "string",
+      "title": "Name"
+    },
+    "affiliated_with": {
+      "type": "string",
+      "format": "iri-reference",
+      "title": "Affiliated with",
+      "x-oold-range": [
+        "https://demo.oo-ld.org/schemas/Organization.schema.json",
+        "https://demo.oo-ld.org/schemas/Person.schema.json"
+      ]
+    }
+  }
+}

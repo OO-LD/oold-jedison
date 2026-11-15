@@ -17,6 +17,34 @@
           </select>
         </div>
       </div>
+      <div class="col-xs-12 col-md-12" v-if="isOold">
+        <div class="row">
+          <div class="col-md-6">
+            <div class="form-group mb-3">
+              <label for="oold-density">Density</label>
+              <select class="form-control" id="oold-density" v-model="ooldDensityLevel" @change="ooldChangeDensity">
+                <option value="comfortable">comfortable</option>
+                <option value="compact">compact</option>
+                <option value="dense">dense</option>
+              </select>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="form-group mb-3">
+              <label for="oold-class">Switch class</label>
+              <select class="form-control" id="oold-class" v-model="ooldClass" @change="ooldSwitchClass(ooldClass)">
+                <option value="">(keep current schema)</option>
+                <option v-for="entry in ooldClasses" :value="entry.id" :key="entry.id">
+                  {{ entry.title }}
+                </option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="alert alert-warning" id="oold-dropped" v-if="ooldDropped.length">
+          Dropped on switch: <code>{{ ooldDropped.join(', ') }}</code>
+        </div>
+      </div>
     </div>
 
     <div class="row layout-row">
@@ -220,6 +248,13 @@
 <script>
 
 import EditorStringCustom from "./js/custom-editor.js"
+import { createDemoBackend, demoClasses, classSchema, isOoldExample } from "./js/oold-demo.js"
+import ooldInlineCreate from "./json/oold/inline-create.json"
+import ooldUnionRange from "./json/oold/union-range.json"
+import ooldTypeSwitch from "./json/oold/type-switch.json"
+import ooldTreeSelect from "./json/oold/tree-select.json"
+import ooldAutocomplete from "./json/oold/autocomplete.json"
+import ooldDensity from "./json/oold/density.json"
 
 import Jedison from '/src/index.js'
 import all from './json/editors/all.json'
@@ -437,6 +472,14 @@ export default {
           'examples/large-table': largeTable,
           'examples/large-table-object': largeTableObject,
           'test': testJson,
+        },
+        'OO-LD': {
+          'oold/inline-create': ooldInlineCreate,
+          'oold/union-range': ooldUnionRange,
+          'oold/type-switch': ooldTypeSwitch,
+          'oold/tree-select': ooldTreeSelect,
+          'oold/autocomplete': ooldAutocomplete,
+          'oold/density': ooldDensity,
         },
         'Editors': {
           'editors/all': all,
@@ -671,6 +714,11 @@ export default {
       editor: null,
       theme: 'barebones',
       iconLib: 'bootstrap-icons',
+      ooldBackend: createDemoBackend(),
+      ooldDensityLevel: 'comfortable',
+      ooldClass: '',
+      ooldClasses: demoClasses(),
+      ooldDropped: [],
       showErrors: 'change',
       switcherInput: 'select',
       language: 'en',
@@ -795,7 +843,64 @@ export default {
 
     this.initEditor()
   },
+  computed: {
+    isOold() {
+      return isOoldExample(this.example)
+    }
+  },
   methods: {
+    buildOoldHost() {
+      const backend = this.ooldBackend
+      const density = this.ooldDensityLevel
+      const language = this.language
+      const theme = this.getThemeInstance(this.theme)
+
+      return new Jedison.oold.InlineCreateHost({
+        backend,
+        language,
+        theme,
+        createEditor: ({ container, classRef, value }) => Jedison.oold.createOoldEditor({
+          container,
+          schema: classSchema(classRef) || {},
+          data: value,
+          baseUri: classRef,
+          backend,
+          language,
+          density,
+          jedison: { theme, iconLib: this.iconLib }
+        })
+      })
+    },
+    attachOoldHost() {
+      const oold = this.editor.getOption('oold')
+
+      if (!oold.host) {
+        oold.host = this.buildOoldHost()
+      }
+
+      // Dialogs stack on the editor they were opened from.
+      oold.host.jedison = this.editor
+      this.editor.oold = oold
+    },
+    async ooldSwitchClass(classRef) {
+      if (!classRef || !this.editor) {
+        return
+      }
+
+      const prepared = await Jedison.oold.prepareSchema(classSchema(classRef) || {}, {
+        baseUri: classRef,
+        backend: this.ooldBackend,
+        language: this.language,
+        density: this.ooldDensityLevel
+      })
+
+      const { dropped } = this.editor.setSchema(prepared.schema)
+      this.ooldDropped = dropped
+      this.attachOoldHost()
+    },
+    ooldChangeDensity() {
+      this.initEditor()
+    },
     saveStickySidebar() {
       try {
         localStorage.setItem('stickySidebar', this.stickySidebar)
@@ -896,8 +1001,15 @@ export default {
         theme: this.getThemeInstance(this.theme),
         refParser,
         customEditors: [
+          ...Jedison.oold.OOLD_EDITORS,
           EditorStringCustom
         ],
+        oold: {
+          backend: this.ooldBackend,
+          language: this.language,
+          density: this.ooldDensityLevel,
+          host: this.isOold ? this.buildOoldHost() : null
+        },
         settings: {
           imaskDate: {
             mask: Date,
@@ -973,11 +1085,25 @@ export default {
         }
       }
 
+      // OO-LD: the density preset sets existing options, and the grid is
+      // derived from the schema rather than written by hand.
+      if (this.isOold) {
+        Object.assign(options, Jedison.oold.density.densityOptions(this.ooldDensityLevel))
+        options.schema = Jedison.oold.density.assignGrid(options.schema, { density: this.ooldDensityLevel })
+        options.keepMissingSchemaFields = true
+        Jedison.oold.applyDensityClass(options.container, this.ooldDensityLevel)
+      }
+
       const t1 = window.performance.now()
       this.editor = new Jedison.Create(options)
       const t2 = window.performance.now()
       console.log('init time', t2 - t1)
       window.editor = this.editor
+
+      if (this.isOold) {
+        this.attachOoldHost()
+      }
+
       if (this.schema && this.schema['x-playgroundDisabled']) {
         this.editor.disable()
       }
