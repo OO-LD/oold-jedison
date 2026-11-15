@@ -38,7 +38,7 @@ function compilePattern(pattern2) {
   }
   return compiledPatterns.get(pattern2);
 }
-function escapeHtml(text) {
+function escapeHtml$1(text) {
   return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
 function escapeRegExp(string) {
@@ -247,8 +247,8 @@ function getValueByJSONPath(data, path) {
   }
   return value;
 }
-function compileTemplate(template, data) {
-  return template.replace(/{{(.*?)}}/g, (_, inner) => {
+function compileTemplate(template2, data) {
+  return template2.replace(/{{(.*?)}}/g, (_, inner) => {
     inner = inner.trim();
     const pipeIdx = inner.indexOf("||");
     let path, fallback;
@@ -2305,10 +2305,10 @@ class Instance extends EventEmitter {
     this.setValueFormTemplate();
   }
   setValueFormTemplate() {
-    const template = getSchemaXOption(this.schema, "template");
-    if (!isSet(template)) return;
-    if (template) {
-      this.setValue(compileTemplate(template, this.watched));
+    const template2 = getSchemaXOption(this.schema, "template");
+    if (!isSet(template2)) return;
+    if (template2) {
+      this.setValue(compileTemplate(template2, this.watched));
     }
   }
   /**
@@ -2326,7 +2326,7 @@ class Instance extends EventEmitter {
   /**
    * Returns the data that will replace placeholders in titles, descriptions (e.g. "{{ i1 }} {{ value.title }}")
    */
-  getTemplateData(template) {
+  getTemplateData(template2) {
     const templateData = {
       ...this.arrayTemplateData,
       value: this.getValueRaw(),
@@ -2338,7 +2338,7 @@ class Instance extends EventEmitter {
         templateData.remaining = this.schema.maxLength - this.value.length;
       }
     }
-    if (template == null ? void 0 : template.includes("{{ functions.")) {
+    if (template2 == null ? void 0 : template2.includes("{{ functions.")) {
       templateData.functions = this.resolveTemplateFunctions(
         this.jedison.getOption("functions")
       );
@@ -2863,7 +2863,7 @@ class Editor {
   getTitle() {
     let titleFromSchema = false;
     const key = this.instance.getKey();
-    this.title = isSet(key) ? escapeHtml(key) : key;
+    this.title = isSet(key) ? escapeHtml$1(key) : key;
     const schemaTitle = getSchemaTitle(this.instance.schema);
     if (isSet(schemaTitle)) {
       this.title = schemaTitle;
@@ -4881,7 +4881,7 @@ class EditorObject extends Editor {
         const path = this.instance.path + this.instance.jedison.pathSeparator + property;
         const id = pathToAttribute(path) + "-activator";
         const domPurifyOptions = this.instance.jedison.getOption("domPurifyOptions");
-        const title = isSet(schemaTitle) ? this.purifyEnabled ? this.purifyContent(schemaTitle, domPurifyOptions) : schemaTitle : escapeHtml(property);
+        const title = isSet(schemaTitle) ? this.purifyEnabled ? this.purifyContent(schemaTitle, domPurifyOptions) : schemaTitle : escapeHtml$1(property);
         const plainTitle = isSet(schemaTitle) ? schemaTitle : property;
         const checkboxControl = this.theme.getCheckboxControl({
           id,
@@ -4954,7 +4954,7 @@ class EditorObject extends Editor {
     this.instance.children.forEach((child) => {
       const optIn = this.theme.getCheckboxControl({
         id: child.path + "-opt-in",
-        title: escapeHtml(child.path + "-opt-in"),
+        title: escapeHtml$1(child.path + "-opt-in"),
         titleHidden: true
       });
       optIn.input.checked = child.isActive;
@@ -6420,9 +6420,9 @@ class EditorArrayNav extends EditorArray {
       let titleTemplate;
       const schemaOptionTitleTemplate = getSchemaXOption(this.instance.schema, "titleTemplate");
       if (schemaOptionTitleTemplate) {
-        const template = schemaOptionTitleTemplate;
-        const data = child.getTemplateData(template);
-        titleTemplate = compileTemplate(template, data) ?? childTitle;
+        const template2 = schemaOptionTitleTemplate;
+        const data = child.getTemplateData(template2);
+        titleTemplate = compileTemplate(template2, data) ?? childTitle;
       }
       const active = index2 === this.activeItemIndex;
       const id = this.getIdFromPath(child.path);
@@ -14469,16 +14469,16 @@ function createStaticBackend(options = {}) {
   const instances = new StaticInstanceStore(options);
   return new Backend({ ...options, name: options.name ?? "static", schemas, classes, instances });
 }
-function expandTemplate(template, values) {
-  if (!isString(template)) {
+function expandTemplate(template2, values) {
+  if (!isString(template2)) {
     return "";
   }
-  return template.replace(/\{([^}]+)\}/g, (match, key) => {
+  return template2.replace(/\{([^}]+)\}/g, (match, key) => {
     const value = values[key];
     return value === void 0 || value === null ? "" : encodeURIComponent(String(value));
   });
 }
-function readPath(value, path) {
+function readPath$1(value, path) {
   if (!isString(path) || path === "") {
     return value;
   }
@@ -14512,7 +14512,7 @@ const DEFAULT_MAPPING = {
 function mapRecord(raw, mapping) {
   const result = { raw };
   for (const [field, path] of Object.entries({ ...DEFAULT_MAPPING, ...mapping })) {
-    result[field] = readPath(raw, path);
+    result[field] = readPath$1(raw, path);
   }
   return result;
 }
@@ -14536,7 +14536,7 @@ class RestSchemaStore extends SchemaStore {
       return [];
     }
     const body = await response.json();
-    const listed = readPath(body, this.classListPath);
+    const listed = readPath$1(body, this.classListPath);
     return isArray(listed) ? listed : [listed].filter(Boolean);
   }
 }
@@ -14572,7 +14572,7 @@ class RestInstanceStore extends InstanceStore {
     if (body === null) {
       return [];
     }
-    const rows = readPath(body, this.resultsPath);
+    const rows = readPath$1(body, this.resultsPath);
     return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping));
   }
   async getLabels(ids, language) {
@@ -14588,7 +14588,7 @@ class RestInstanceStore extends InstanceStore {
     if (body === null) {
       return {};
     }
-    const rows = readPath(body, this.resultsPath);
+    const rows = readPath$1(body, this.resultsPath);
     const map = {};
     for (const row of isArray(rows) ? rows : [rows].filter(Boolean)) {
       const record = mapRecord(row, this.mapping);
@@ -14617,7 +14617,7 @@ class RestInstanceStore extends InstanceStore {
     if (body === null) {
       return [];
     }
-    const rows = readPath(body, this.resultsPath);
+    const rows = readPath$1(body, this.resultsPath);
     return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping).id).filter(isString);
   }
 }
@@ -14631,8 +14631,8 @@ class RestClassIndex extends ClassIndex {
     this.resultsPath = options.resultsPath ?? "";
     this.mapping = options.mapping ?? {};
   }
-  async list(template, values) {
-    const url = expandTemplate(template, values);
+  async list(template2, values) {
+    const url = expandTemplate(template2, values);
     if (!this.fetch || !url) {
       return [];
     }
@@ -14640,7 +14640,7 @@ class RestClassIndex extends ClassIndex {
     if (!response || !response.ok) {
       return [];
     }
-    const rows = readPath(await response.json(), this.resultsPath);
+    const rows = readPath$1(await response.json(), this.resultsPath);
     return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping).id).filter(isString);
   }
   async getSubclasses(classRef, options = {}) {
@@ -14675,11 +14675,11 @@ function escapeLiteral(value) {
 function escapeIri(value) {
   return String(value ?? "").replace(/[<>"{}|^`\\\s]/g, "");
 }
-function fillQuery(template, values) {
-  if (!isString(template)) {
+function fillQuery(template2, values) {
+  if (!isString(template2)) {
     return "";
   }
-  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+  return template2.replace(/\{\{(\w+)\}\}/g, (match, key) => {
     if (key.endsWith("Iri")) {
       return escapeIri(values[key.slice(0, -3)] ?? values[key]);
     }
@@ -15059,24 +15059,1038 @@ const index$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.definePrope
   escapeLiteral,
   expandTemplate,
   fillQuery,
-  readPath,
+  readPath: readPath$1,
   subclassChainQuery,
   supports
 }, Symbol.toStringTag, { value: "Module" }));
+function readPath(value, path) {
+  if (!isString(path) || path === "") {
+    return value;
+  }
+  let current = value;
+  for (const segment of path.split(".")) {
+    if (segment === "") {
+      continue;
+    }
+    if (!isObject$1(current) && !isArray(current)) {
+      return void 0;
+    }
+    current = current[segment];
+  }
+  return current;
+}
+const ENTITIES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ENTITIES[character]);
+}
+function render(template2, data, options = {}) {
+  if (typeof template2 === "function") {
+    return template2(data);
+  }
+  if (!isString(template2)) {
+    return "";
+  }
+  const escape = options.escape !== false;
+  return template2.replace(/\{\{\{\s*([\w.[\]]+)\s*\}\}\}/g, (match, path) => {
+    const value = readPath(data, path);
+    return value === void 0 || value === null ? "" : String(value);
+  }).replace(/\{\{\s*([\w.[\]]+)\s*\}\}/g, (match, path) => {
+    const value = readPath(data, path);
+    if (value === void 0 || value === null) {
+      return "";
+    }
+    return escape ? escapeHtml(value) : String(value);
+  });
+}
+function storeValue(record, template2) {
+  if (!template2) {
+    return record == null ? void 0 : record.id;
+  }
+  const value = render(template2, record, { escape: false });
+  return value === "" ? record == null ? void 0 : record.id : value;
+}
+function labelValue(record, template2) {
+  if (!template2) {
+    return (record == null ? void 0 : record.label) ?? (record == null ? void 0 : record.id);
+  }
+  const value = render(template2, record, { escape: false });
+  return value === "" ? (record == null ? void 0 : record.label) ?? (record == null ? void 0 : record.id) : value;
+}
+const template = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  escapeHtml,
+  labelValue,
+  readPath,
+  render,
+  storeValue
+}, Symbol.toStringTag, { value: "Module" }));
+class SuggestController {
+  constructor(options = {}) {
+    this.backend = options.backend;
+    this.spec = options.spec ?? {};
+    this.templates = options.templates ?? {};
+    this.language = options.language ?? "en";
+    this.debounce = options.debounce ?? 200;
+    this.minLength = options.minLength ?? 0;
+    this.value = void 0;
+    this.label = void 0;
+    this.results = [];
+    this.pending = false;
+    this.unhandledInput = false;
+    this.listeners = {};
+    this.timer = null;
+    this.requestId = 0;
+  }
+  on(name, callback) {
+    this.listeners[name] = this.listeners[name] ?? [];
+    this.listeners[name].push(callback);
+    return this;
+  }
+  emit(name, payload) {
+    for (const callback of this.listeners[name] ?? []) {
+      callback(payload);
+    }
+  }
+  get canSearch() {
+    return Boolean(this.backend) && this.backend.can("canSearch");
+  }
+  get canCreate() {
+    return Boolean(this.backend) && this.backend.can("canCreate");
+  }
+  get canEdit() {
+    return Boolean(this.backend) && this.backend.can("canEdit");
+  }
+  get isEmpty() {
+    return this.value === void 0 || this.value === null || this.value === "";
+  }
+  /**
+   * Called on every keystroke. Marks the input unhandled and schedules a search.
+   */
+  input(text) {
+    this.unhandledInput = true;
+    this.label = text;
+    this.emit("input", text);
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+    }
+    if (!this.canSearch || String(text).length < this.minLength) {
+      this.results = [];
+      this.emit("results", this.results);
+      return;
+    }
+    this.timer = setTimeout(() => this.search(text), this.debounce);
+  }
+  async search(text, formValue) {
+    const id = ++this.requestId;
+    this.pending = true;
+    this.emit("pending", true);
+    let records = [];
+    try {
+      records = await this.backend.instances.search(this.spec, text, formValue, this.language);
+    } catch (error) {
+      records = [];
+      this.emit("error", error);
+    }
+    if (id !== this.requestId) {
+      return this.results;
+    }
+    this.pending = false;
+    this.emit("pending", false);
+    this.results = isArray(records) ? records : [];
+    this.emit("results", this.results);
+    return this.results;
+  }
+  /**
+   * Accepts a suggestion. This is the only path that produces a value.
+   */
+  select(record) {
+    this.unhandledInput = false;
+    this.value = storeValue(record, this.templates.store);
+    this.label = labelValue(record, this.templates.label);
+    this.results = [];
+    this.emit("change", { value: this.value, label: this.label, record });
+    return this.value;
+  }
+  clear() {
+    this.unhandledInput = false;
+    this.value = void 0;
+    this.label = "";
+    this.results = [];
+    this.emit("change", { value: void 0, label: "", record: void 0 });
+  }
+  /**
+   * Resolves what the form currently holds. Partial input yields nothing, which
+   * is what stops a half-typed name being stored as if it were a reference.
+   */
+  commit() {
+    if (this.unhandledInput) {
+      this.clear();
+      return void 0;
+    }
+    return this.value;
+  }
+  /**
+   * Adopts a value loaded from storage. The label is unknown at this point and
+   * is filled in by the batch that runs once the form is populated.
+   */
+  async adopt(value) {
+    this.unhandledInput = false;
+    this.value = value;
+    if (this.isEmpty) {
+      this.label = "";
+      this.emit("label", this.label);
+      return this.label;
+    }
+    this.label = value;
+    if (this.backend && this.backend.can("canLabel")) {
+      const resolved = await this.backend.instances.getLabel(value, this.language);
+      if (resolved && this.value === value) {
+        this.label = resolved;
+      }
+    }
+    this.emit("label", this.label);
+    return this.label;
+  }
+  renderSuggestion(record) {
+    if (!this.templates.render) {
+      return void 0;
+    }
+    return render(this.templates.render, record);
+  }
+  destroy() {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    this.listeners = {};
+  }
+}
+const RESOLVED = "x-oold-range-resolved";
+function getOoldOptions(instance) {
+  return instance.jedison.getOption("oold") ?? {};
+}
+function getRangeSpec(schema) {
+  if (isSet(schema[RESOLVED])) {
+    return schema[RESOLVED];
+  }
+  if (isSet(schema[OOLD_RANGE])) {
+    return normaliseRange(schema[OOLD_RANGE]);
+  }
+  return void 0;
+}
+class EditorOoldRange extends EditorString {
+  static resolves(schema) {
+    return getSchemaType(schema) === "string" && isSet(getRangeSpec(schema));
+  }
+  static priority() {
+    return 100;
+  }
+  build() {
+    const schema = this.instance.schema;
+    const oold2 = getOoldOptions(this.instance);
+    this.spec = getRangeSpec(schema) ?? { classes: [], union: false };
+    this.backend = oold2.backend;
+    this.host = oold2.host;
+    this.control = this.theme.getInputControl({
+      title: this.getTitle(),
+      description: this.getDescription(),
+      type: "text",
+      id: this.getIdFromPath(this.instance.path),
+      titleIconClass: getSchemaXOption(schema, "titleIconClass"),
+      titleHidden: getSchemaXOption(schema, "titleHidden"),
+      info: this.getInfo()
+    });
+    this.controller = new SuggestController({
+      backend: this.backend,
+      spec: { ...this.spec, limit: getSchemaXOption(schema, "oold-limit") },
+      language: oold2.language,
+      templates: {
+        render: schema["x-oold-jedison-render-template"],
+        label: schema["x-oold-jedison-label-template"],
+        store: schema["x-oold-jedison-store-template"]
+      }
+    });
+    this.buildSuggestionList();
+    this.buildActions();
+  }
+  buildSuggestionList() {
+    const list = document.createElement("ul");
+    list.classList.add("jedi-oold-suggestions");
+    list.setAttribute("role", "listbox");
+    list.style.display = "none";
+    list.style.listStyle = "none";
+    list.style.margin = "0";
+    list.style.padding = "0";
+    list.style.position = "absolute";
+    list.style.zIndex = "1000";
+    list.style.width = "100%";
+    list.style.background = "var(--jedi-oold-bg, #fff)";
+    list.style.border = "1px solid rgba(0,0,0,.15)";
+    list.style.maxHeight = "18rem";
+    list.style.overflowY = "auto";
+    this.suggestionList = list;
+    const anchor = document.createElement("div");
+    anchor.style.position = "relative";
+    anchor.appendChild(list);
+    this.control.container.insertBefore(anchor, this.control.description);
+  }
+  /**
+   * Action buttons sit inside the input group, not in a column beside it.
+   * A form with several reference properties otherwise spends a large part of
+   * its width on buttons.
+   */
+  buildActions() {
+    const group = document.createElement("div");
+    group.classList.add("jedi-oold-actions", "input-group-text");
+    group.style.display = "inline-flex";
+    group.style.gap = ".125rem";
+    this.buttons = {};
+    const wanted = [
+      ["clear", "close", "oold.clear"],
+      ["create", "add", "oold.create"],
+      ["edit", "edit", "oold.edit"],
+      ["clone", "copy", "oold.clone"]
+    ];
+    for (const [name, icon, translationKey] of wanted) {
+      const button = this.theme.getButton({
+        content: this.translate(translationKey),
+        icon,
+        id: `${this.getIdFromPath(this.instance.path)}-${name}`
+      });
+      button.classList.add(`jedi-oold-${name}`);
+      this.buttons[name] = button;
+      group.appendChild(button);
+    }
+    const wrapper = document.createElement("div");
+    wrapper.classList.add("jedi-oold-input-group", "input-group");
+    wrapper.style.display = "flex";
+    wrapper.style.flexWrap = "nowrap";
+    this.control.input.parentNode.insertBefore(wrapper, this.control.input);
+    wrapper.appendChild(this.control.input);
+    wrapper.appendChild(group);
+    this.actionsGroup = group;
+  }
+  translate(key) {
+    const fallback = {
+      "oold.clear": "Clear",
+      "oold.create": "Create",
+      "oold.edit": "Edit",
+      "oold.clone": "Clone"
+    };
+    return this.instance.jedison.translator.translate(key) ?? fallback[key];
+  }
+  addEventListeners() {
+    this.control.input.addEventListener("input", () => {
+      this.controller.input(this.control.input.value);
+    });
+    this.control.input.addEventListener("blur", () => {
+      window.setTimeout(() => {
+        if (this.controller.unhandledInput) {
+          this.controller.commit();
+          this.instance.setValue("", true, "user");
+        }
+        this.hideSuggestions();
+      }, 150);
+    });
+    this.controller.on("results", (records) => this.renderSuggestions(records));
+    this.controller.on("change", ({ value, label }) => {
+      this.control.input.value = label ?? "";
+      this.instance.setValue(value ?? "", true, "user");
+      this.refreshActions();
+    });
+    this.controller.on("label", (label) => {
+      this.control.input.value = label ?? "";
+      this.refreshActions();
+    });
+    this.buttons.clear.addEventListener("click", () => {
+      this.controller.clear();
+    });
+    this.buttons.create.addEventListener("click", () => this.create());
+    this.buttons.edit.addEventListener("click", () => this.edit());
+    this.buttons.clone.addEventListener("click", () => this.edit({ mode: "copy" }));
+  }
+  renderSuggestions(records) {
+    const list = this.suggestionList;
+    list.textContent = "";
+    if (!records.length) {
+      this.hideSuggestions();
+      return;
+    }
+    for (const record of records) {
+      const item = document.createElement("li");
+      item.setAttribute("role", "option");
+      item.classList.add("jedi-oold-suggestion");
+      item.style.cursor = "pointer";
+      item.style.padding = ".25rem .5rem";
+      const markup = this.controller.renderSuggestion(record);
+      if (isString(markup)) {
+        item.innerHTML = this.purifyContent(markup);
+      } else {
+        item.appendChild(this.defaultSuggestion(record));
+      }
+      item.addEventListener("mousedown", (event) => {
+        event.preventDefault();
+        this.controller.select(record);
+        this.hideSuggestions();
+      });
+      list.appendChild(item);
+    }
+    list.style.display = "block";
+  }
+  defaultSuggestion(record) {
+    const row = document.createElement("span");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = ".5rem";
+    if (isString(record.image)) {
+      const image = document.createElement("img");
+      image.setAttribute("src", record.image);
+      image.setAttribute("alt", "");
+      image.style.width = "1.5rem";
+      image.style.height = "1.5rem";
+      image.style.objectFit = "cover";
+      row.appendChild(image);
+    }
+    const text = document.createElement("span");
+    const label = document.createElement("strong");
+    label.textContent = record.label ?? record.id;
+    text.appendChild(label);
+    if (isString(record.description) && record.description !== "") {
+      const description = document.createElement("small");
+      description.textContent = ` ${record.description}`;
+      description.style.opacity = ".75";
+      text.appendChild(description);
+    }
+    row.appendChild(text);
+    return row;
+  }
+  hideSuggestions() {
+    this.suggestionList.style.display = "none";
+  }
+  /**
+   * Opens a nested editor for a new target. Where the range admits more than
+   * one class the target class is chosen first.
+   */
+  async create() {
+    if (!this.host || !this.controller.canCreate) {
+      return;
+    }
+    const created = await this.host.create({
+      classes: this.spec.classes,
+      union: this.spec.union,
+      subclassOfRange: this.instance.schema["x-oold-jedison-subclassof-range"],
+      anchor: this.buttons.create
+    });
+    if (created && created.id) {
+      this.controller.select(created);
+    }
+  }
+  async edit(options = {}) {
+    if (!this.host || !this.controller.canEdit || this.controller.isEmpty) {
+      return;
+    }
+    const edited = await this.host.edit({
+      id: this.controller.value,
+      mode: options.mode,
+      classes: this.spec.classes,
+      anchor: this.buttons.edit
+    });
+    if (edited && edited.id) {
+      this.controller.select(edited);
+    }
+  }
+  /**
+   * Shows only what the backend can actually do, and only what makes sense for
+   * the current state.
+   */
+  refreshActions() {
+    const empty = this.controller.isEmpty;
+    const show = (button, visible) => {
+      button.style.display = visible ? "" : "none";
+    };
+    show(this.buttons.clear, !empty);
+    show(this.buttons.create, empty && this.controller.canCreate && Boolean(this.host));
+    show(this.buttons.edit, !empty && this.controller.canEdit && Boolean(this.host));
+    show(this.buttons.clone, !empty && this.controller.canCreate && Boolean(this.host));
+    this.actionsGroup.style.display = this.actionsGroup.querySelector('button:not([style*="none"])') ? "inline-flex" : "none";
+  }
+  adaptForHorizontal(labelCol, inputCol) {
+    this.theme.adaptForHorizontalInputControl(this.control, labelCol, inputCol);
+  }
+  sanitize(value) {
+    return String(value);
+  }
+  refreshUI() {
+    super.refreshUI();
+    const value = this.instance.getValue();
+    if (value !== this.controller.value) {
+      this.controller.adopt(value);
+    }
+    this.refreshActions();
+  }
+  destroy() {
+    this.controller.destroy();
+    super.destroy();
+  }
+}
+const FORMAT$1 = "oold-autocomplete";
+class EditorOoldAutocomplete extends EditorOoldRange {
+  static resolves(schema) {
+    return getSchemaType(schema) === "string" && getSchemaXOption(schema, "format") === FORMAT$1;
+  }
+  static priority() {
+    return 105;
+  }
+  build() {
+    const schema = this.instance.schema;
+    const source = schema["x-oold-jedison-source"];
+    this.staticItems = isArray(source == null ? void 0 : source.items) ? source.items : void 0;
+    super.build();
+    if (this.staticItems) {
+      this.controller.backend = this.staticBackend();
+    }
+  }
+  /**
+   * Wraps the static list in the small part of the backend surface the
+   * controller actually uses.
+   */
+  staticBackend() {
+    const items2 = this.staticItems.map((item) => typeof item === "string" ? { id: item, label: item } : item);
+    return {
+      can: (capability) => capability === "canSearch" || capability === "canLabel",
+      instances: {
+        search: async (spec, userInput) => {
+          const needle = String(userInput ?? "").toLowerCase();
+          return items2.filter((item) => {
+            if (!needle) {
+              return true;
+            }
+            return `${item.label ?? ""} ${item.description ?? ""}`.toLowerCase().includes(needle);
+          });
+        },
+        getLabels: async (ids) => {
+          const map = {};
+          for (const item of items2) {
+            if (ids.includes(item.id)) {
+              map[item.id] = item.label;
+            }
+          }
+          return map;
+        },
+        getLabel: async (id) => {
+          var _a;
+          return (_a = items2.find((item) => item.id === id)) == null ? void 0 : _a.label;
+        }
+      }
+    };
+  }
+  /**
+   * No range, so nothing to create. The buttons the parent builds stay hidden.
+   */
+  refreshActions() {
+    const empty = this.controller.isEmpty;
+    this.buttons.clear.style.display = empty ? "none" : "";
+    for (const name of ["create", "edit", "clone"]) {
+      this.buttons[name].style.display = "none";
+    }
+    this.actionsGroup.style.display = empty ? "none" : "inline-flex";
+  }
+}
+class TreeController {
+  constructor(options = {}) {
+    this.backend = options.backend;
+    this.rootClasses = isArray(options.rootClasses) ? options.rootClasses : [];
+    this.multiple = options.multiple === true;
+    this.includeInstances = options.includeInstances === true;
+    this.showAncestors = options.showAncestors !== false;
+    this.language = options.language ?? "en";
+    this.nodes = /* @__PURE__ */ new Map();
+    this.expanded = /* @__PURE__ */ new Set();
+    this.selected = /* @__PURE__ */ new Set();
+    this.listeners = {};
+  }
+  on(name, callback) {
+    this.listeners[name] = this.listeners[name] ?? [];
+    this.listeners[name].push(callback);
+    return this;
+  }
+  emit(name, payload) {
+    for (const callback of this.listeners[name] ?? []) {
+      callback(payload);
+    }
+  }
+  get canExpand() {
+    return Boolean(this.backend) && this.backend.can("hasHierarchy");
+  }
+  node(id) {
+    if (!this.nodes.has(id)) {
+      this.nodes.set(id, { id, label: id, children: void 0, loading: false, kind: "class" });
+    }
+    return this.nodes.get(id);
+  }
+  /**
+   * Builds the starting set: the range classes, preceded by their ancestors
+   * where those are shown. Inline creation hides them, since only
+   * specialisation is meaningful when creating a target.
+   */
+  async init() {
+    const roots = [...this.rootClasses];
+    if (this.showAncestors && this.backend && this.backend.can("hasAncestors")) {
+      for (const classRef of this.rootClasses) {
+        const ancestors = await this.backend.classes.getSuperclasses(classRef);
+        for (const ancestor of isArray(ancestors) ? ancestors : []) {
+          if (!roots.includes(ancestor)) {
+            roots.unshift(ancestor);
+          }
+        }
+      }
+    }
+    for (const id of roots) {
+      this.node(id);
+    }
+    this.rootClasses = roots;
+    await this.labelAll(roots);
+    this.emit("change", this.snapshot());
+    return roots;
+  }
+  async expand(id) {
+    const node = this.node(id);
+    this.expanded.add(id);
+    if (node.children !== void 0 || !this.canExpand) {
+      this.emit("change", this.snapshot());
+      return node.children ?? [];
+    }
+    node.loading = true;
+    this.emit("change", this.snapshot());
+    let children = [];
+    try {
+      children = await this.backend.classes.getSubclasses(id, { depth: 1 });
+    } catch (error) {
+      children = [];
+      this.emit("error", error);
+    }
+    const ids = isArray(children) ? children : [];
+    for (const child of ids) {
+      this.node(child);
+    }
+    if (this.includeInstances && this.backend.can("canSearch")) {
+      const instances = await this.backend.instances.search({ classes: [id] }, "", void 0, this.language);
+      for (const record of isArray(instances) ? instances : []) {
+        const instanceNode = this.node(record.id);
+        instanceNode.kind = "instance";
+        instanceNode.label = record.label ?? record.id;
+        instanceNode.record = record;
+        ids.push(record.id);
+      }
+    }
+    node.children = ids;
+    node.loading = false;
+    await this.labelAll(ids);
+    this.emit("change", this.snapshot());
+    return ids;
+  }
+  collapse(id) {
+    this.expanded.delete(id);
+    this.emit("change", this.snapshot());
+  }
+  toggle(id) {
+    return this.expanded.has(id) ? this.collapse(id) : this.expand(id);
+  }
+  async labelAll(ids) {
+    const classes = ids.filter((id) => this.node(id).kind === "class");
+    if (!classes.length || !this.backend || !this.backend.can("canLabel")) {
+      return;
+    }
+    const labels = await this.backend.instances.getLabels(classes, this.language);
+    for (const [id, label] of Object.entries(labels ?? {})) {
+      if (label) {
+        this.node(id).label = label;
+      }
+    }
+  }
+  select(id) {
+    if (this.multiple) {
+      if (this.selected.has(id)) {
+        this.selected.delete(id);
+      } else {
+        this.selected.add(id);
+      }
+    } else {
+      this.selected = /* @__PURE__ */ new Set([id]);
+    }
+    this.emit("select", this.value);
+    this.emit("change", this.snapshot());
+    return this.value;
+  }
+  setValue(value) {
+    const values = isArray(value) ? value : [value].filter((entry) => entry !== void 0 && entry !== "");
+    this.selected = new Set(values);
+    this.emit("change", this.snapshot());
+  }
+  get value() {
+    const values = [...this.selected];
+    return this.multiple ? values : values[0];
+  }
+  snapshot() {
+    return {
+      nodes: [...this.nodes.values()].map((node) => ({ ...node })),
+      expanded: [...this.expanded],
+      selected: [...this.selected]
+    };
+  }
+  destroy() {
+    this.listeners = {};
+    this.nodes.clear();
+  }
+}
+const FORMAT = "oold-tree-select";
+class EditorOoldTreeSelect extends EditorString {
+  static resolves(schema) {
+    if (getSchemaXOption(schema, "format") !== FORMAT) {
+      return false;
+    }
+    const type2 = getSchemaType(schema);
+    return type2 === "string" || type2 === "array";
+  }
+  static priority() {
+    return 110;
+  }
+  get multiple() {
+    return getSchemaType(this.instance.schema) === "array";
+  }
+  build() {
+    const schema = this.instance.schema;
+    const oold2 = getOoldOptions(this.instance);
+    const itemSchema = this.multiple && isSet(schema.items) ? schema.items : schema;
+    const spec = getRangeSpec(itemSchema) ?? { classes: [] };
+    this.backend = oold2.backend;
+    this.control = this.theme.getObjectControl ? this.theme.getInputControl({
+      title: this.getTitle(),
+      description: this.getDescription(),
+      type: "hidden",
+      id: this.getIdFromPath(this.instance.path),
+      titleHidden: getSchemaXOption(schema, "titleHidden"),
+      info: this.getInfo()
+    }) : this.theme.getInputControl({ title: this.getTitle(), type: "hidden", id: this.getIdFromPath(this.instance.path) });
+    this.controller = new TreeController({
+      backend: this.backend,
+      rootClasses: spec.classes,
+      multiple: this.multiple,
+      includeInstances: getSchemaXOption(schema, "oold-instances") !== false,
+      showAncestors: oold2.hideAncestors !== true,
+      language: oold2.language
+    });
+    this.tree = document.createElement("ul");
+    this.tree.classList.add("jedi-oold-tree");
+    this.tree.setAttribute("role", "tree");
+    this.tree.style.listStyle = "none";
+    this.tree.style.margin = "0";
+    this.tree.style.paddingLeft = "0";
+    this.control.container.insertBefore(this.tree, this.control.description);
+    this.controller.on("change", (snapshot) => this.renderTree(snapshot));
+    this.controller.init();
+  }
+  renderTree(snapshot) {
+    const byId = new Map(snapshot.nodes.map((node) => [node.id, node]));
+    const expanded = new Set(snapshot.expanded);
+    const selected = new Set(snapshot.selected);
+    const roots = this.controller.rootClasses;
+    this.tree.textContent = "";
+    const seen = /* @__PURE__ */ new Set();
+    const renderNode = (id, depth) => {
+      if (seen.has(id)) {
+        return;
+      }
+      seen.add(id);
+      const node = byId.get(id);
+      if (!node) {
+        return;
+      }
+      const item = document.createElement("li");
+      item.setAttribute("role", "treeitem");
+      item.setAttribute("data-oold-node", id);
+      item.style.paddingLeft = `${depth * 1}rem`;
+      item.style.display = "flex";
+      item.style.alignItems = "center";
+      item.style.gap = ".25rem";
+      if (node.kind === "class") {
+        const toggle = document.createElement("button");
+        toggle.setAttribute("type", "button");
+        toggle.classList.add("jedi-oold-tree-toggle");
+        toggle.textContent = node.loading ? "..." : expanded.has(id) ? "-" : "+";
+        toggle.addEventListener("click", () => this.controller.toggle(id));
+        item.appendChild(toggle);
+      }
+      const picker = document.createElement(this.multiple ? "input" : "button");
+      if (this.multiple) {
+        picker.setAttribute("type", "checkbox");
+        picker.checked = selected.has(id);
+        picker.addEventListener("change", () => this.pick(id));
+      } else {
+        picker.setAttribute("type", "button");
+        picker.classList.add("jedi-oold-tree-select");
+        picker.textContent = node.label ?? id;
+        picker.style.fontWeight = selected.has(id) ? "700" : "400";
+        picker.addEventListener("click", () => this.pick(id));
+      }
+      item.appendChild(picker);
+      if (this.multiple) {
+        const label = document.createElement("label");
+        label.textContent = node.label ?? id;
+        item.appendChild(label);
+      }
+      this.tree.appendChild(item);
+      if (expanded.has(id) && isArray(node.children)) {
+        for (const child of node.children) {
+          renderNode(child, depth + 1);
+        }
+      }
+    };
+    for (const root of roots) {
+      renderNode(root, 0);
+    }
+  }
+  pick(id) {
+    const value = this.controller.select(id);
+    this.instance.setValue(this.multiple ? value ?? [] : value ?? "", true, "user");
+  }
+  addEventListeners() {
+  }
+  sanitize(value) {
+    return this.multiple ? value : String(value);
+  }
+  refreshUI() {
+    Editor.prototype.refreshUI.call(this);
+    this.controller.setValue(this.instance.getValue());
+  }
+  destroy() {
+    this.controller.destroy();
+    super.destroy();
+  }
+}
+class InlineCreateHost {
+  constructor(options = {}) {
+    this.jedison = options.jedison;
+    this.backend = options.backend;
+    this.createEditor = options.createEditor;
+    this.language = options.language ?? "en";
+    this.open = [];
+  }
+  get theme() {
+    return this.jedison.theme;
+  }
+  /**
+   * Picks the class to instantiate. With a single target there is nothing to
+   * ask; with several the user chooses before the editor opens.
+   */
+  async chooseClass(classes, anchor) {
+    if (!isArray(classes) || classes.length === 0) {
+      return void 0;
+    }
+    if (classes.length === 1) {
+      return classes[0];
+    }
+    return this.promptForClass(classes, anchor);
+  }
+  promptForClass(classes, anchor) {
+    return new Promise((resolve) => {
+      const menu = document.createElement("ul");
+      menu.classList.add("jedi-oold-class-menu", "dropdown-menu");
+      menu.style.display = "block";
+      menu.style.position = "absolute";
+      menu.style.zIndex = "1080";
+      menu.style.listStyle = "none";
+      menu.style.margin = "0";
+      menu.style.padding = ".25rem";
+      const close = (value) => {
+        menu.remove();
+        document.removeEventListener("mousedown", onOutside, true);
+        resolve(value);
+      };
+      const onOutside = (event) => {
+        if (!menu.contains(event.target)) {
+          close(void 0);
+        }
+      };
+      for (const classRef of classes) {
+        const item = document.createElement("li");
+        const button = document.createElement("button");
+        button.setAttribute("type", "button");
+        button.classList.add("dropdown-item", "jedi-oold-class-option");
+        button.setAttribute("data-oold-class", classRef);
+        button.textContent = classRef;
+        button.addEventListener("click", () => close(classRef));
+        item.appendChild(button);
+        menu.appendChild(item);
+      }
+      const parent = anchor && anchor.parentNode ? anchor.parentNode : document.body;
+      parent.appendChild(menu);
+      document.addEventListener("mousedown", onOutside, true);
+    });
+  }
+  async create(request = {}) {
+    const classRef = await this.chooseClass(request.classes, request.anchor);
+    if (!classRef) {
+      return void 0;
+    }
+    return this.openEditor({
+      classRef,
+      value: request.value,
+      subclassOfRange: request.subclassOfRange,
+      title: classRef
+    });
+  }
+  async edit(request = {}) {
+    if (!this.backend.can("canLoad")) {
+      return void 0;
+    }
+    const loaded = await this.backend.instances.load(request.id);
+    if (!loaded) {
+      return void 0;
+    }
+    const value = request.mode === "copy" ? { ...loaded, id: void 0 } : loaded;
+    const classRef = loaded.type ?? (isArray(request.classes) ? request.classes[0] : void 0);
+    return this.openEditor({ classRef, value, title: request.id });
+  }
+  /**
+   * Builds a dialog around a nested jedison instance and resolves with the
+   * saved record, or undefined when the user cancels.
+   */
+  openEditor(request) {
+    return new Promise((resolve) => {
+      const dialog = this.theme.getDialog();
+      const body = dialog.content ?? dialog.container ?? dialog;
+      const host = document.createElement("div");
+      body.appendChild(host);
+      document.body.appendChild(dialog.container ?? dialog);
+      let nested;
+      const finish = (result) => {
+        if (nested && typeof nested.destroy === "function") {
+          nested.destroy();
+        }
+        const root = dialog.container ?? dialog;
+        if (root.parentNode) {
+          root.parentNode.removeChild(root);
+        }
+        this.open.pop();
+        resolve(result);
+      };
+      const actions = document.createElement("div");
+      actions.classList.add("jedi-oold-dialog-actions");
+      const cancel = this.theme.getButton({ content: "Cancel", icon: "close" });
+      cancel.classList.add("jedi-oold-cancel");
+      cancel.addEventListener("click", () => finish(void 0));
+      const save = this.theme.getButton({ content: "Save", icon: "save" });
+      save.classList.add("jedi-oold-save");
+      save.addEventListener("click", async () => {
+        const entity = nested ? nested.getValue() : request.value;
+        const saved = await this.backend.instances.save(entity);
+        if (!saved || !saved.id) {
+          finish(void 0);
+          return;
+        }
+        const label = (entity == null ? void 0 : entity.label) ?? (entity == null ? void 0 : entity.name) ?? saved.id;
+        finish({ id: saved.id, label, raw: entity });
+      });
+      actions.appendChild(cancel);
+      actions.appendChild(save);
+      body.appendChild(actions);
+      this.open.push(dialog);
+      Promise.resolve(this.createEditor({ container: host, classRef: request.classRef, value: request.value })).then((editor) => {
+        nested = editor;
+      }).catch(() => finish(void 0));
+    });
+  }
+  destroy() {
+    for (const dialog of this.open) {
+      const root = dialog.container ?? dialog;
+      if (root && root.parentNode) {
+        root.parentNode.removeChild(root);
+      }
+    }
+    this.open = [];
+  }
+}
+const OOLD_EDITORS = [EditorOoldRange, EditorOoldAutocomplete, EditorOoldTreeSelect];
+async function prepareSchema(schema, options = {}) {
+  const based = options.baseUri ? rebase(schema, options.baseUri) : clone(schema);
+  const refParser = options.refParser ?? new RefParser({
+    fetch: options.backend ? options.backend.toFetch() : options.fetch
+  });
+  await refParser.dereference(based);
+  refParser.expandRecursive(based);
+  const { schema: form, collected } = preprocess(based, options);
+  return { schema: form, collected, refParser };
+}
+async function createOoldEditor(options = {}) {
+  const { schema, collected, refParser } = await prepareSchema(options.schema ?? {}, options);
+  const oold2 = {
+    backend: options.backend,
+    language: options.language ?? "en",
+    hideAncestors: options.hideAncestors === true,
+    collected
+  };
+  const jedison = new Jedison({
+    ...options.jedison,
+    container: options.container,
+    schema,
+    data: options.data,
+    refParser,
+    language: oold2.language,
+    customEditors: [...OOLD_EDITORS, ...options.customEditors ?? []],
+    oold: oold2
+  });
+  if (options.backend) {
+    oold2.host = options.host ?? new InlineCreateHost({
+      jedison,
+      backend: options.backend,
+      language: oold2.language,
+      createEditor: async ({ container, classRef, value }) => {
+        const response = await options.backend.schemas.resolve(classRef);
+        const target = response && response.ok ? await response.json() : {};
+        return createOoldEditor({
+          ...options,
+          container,
+          schema: target,
+          data: value,
+          baseUri: options.baseUri ?? classRef
+        });
+      }
+    });
+  }
+  jedison.oold = oold2;
+  return jedison;
+}
 const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
+  EditorOoldAutocomplete,
+  EditorOoldRange,
+  EditorOoldTreeSelect,
+  InlineCreateHost,
+  OOLD_EDITORS,
   OoldRefResolver,
+  SuggestController,
+  TreeController,
   backend: index$1,
   constants,
+  createOoldEditor,
   mapUiKeywords,
   mergeAllOf,
   mergeTwo,
   normaliseRange,
   normaliseRanges,
+  prepareSchema,
   preprocess,
   rebase,
   resolveMultilang,
-  stripSemantics
+  stripSemantics,
+  template
 }, Symbol.toStringTag, { value: "Module" }));
 const index = {
   Schema,

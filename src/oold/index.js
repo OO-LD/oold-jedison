@@ -8,6 +8,14 @@ import { rebase } from './preprocess/rebase.js'
 import { OoldRefResolver } from './preprocess/oold-ref.js'
 import * as backend from './backend/index.js'
 import * as constants from './constants.js'
+import { createOoldEditor, prepareSchema, OOLD_EDITORS } from './create.js'
+import EditorOoldRange from './editors/range.js'
+import EditorOoldAutocomplete from './editors/autocomplete.js'
+import EditorOoldTreeSelect from './editors/tree-select.js'
+import { SuggestController } from './ui/suggest-controller.js'
+import { TreeController } from './ui/tree-controller.js'
+import { InlineCreateHost } from './ui/inline-create.js'
+import * as template from './ui/template.js'
 
 export {
   preprocess,
@@ -21,5 +29,15 @@ export {
   rebase,
   OoldRefResolver,
   backend,
-  constants
+  constants,
+  createOoldEditor,
+  prepareSchema,
+  OOLD_EDITORS,
+  EditorOoldRange,
+  EditorOoldAutocomplete,
+  EditorOoldTreeSelect,
+  SuggestController,
+  TreeController,
+  InlineCreateHost,
+  template
 }
