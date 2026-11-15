@@ -6,6 +6,7 @@ import { normaliseRange, normaliseRanges } from './preprocess/range.js'
 import { stripSemantics } from './preprocess/strip.js'
 import { rebase } from './preprocess/rebase.js'
 import { OoldRefResolver } from './preprocess/oold-ref.js'
+import * as backend from './backend/index.js'
 import * as constants from './constants.js'
 
 export {
@@ -19,5 +20,6 @@ export {
   stripSemantics,
   rebase,
   OoldRefResolver,
+  backend,
   constants
 }

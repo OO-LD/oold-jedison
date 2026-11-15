@@ -13972,13 +13972,13 @@ function walk(node, baseUri) {
     return node;
   }
   const result = {};
-  const base = isString(node.$id) ? absolute(node.$id, baseUri) : baseUri;
+  const base = isString(node.$id) ? absolute$1(node.$id, baseUri) : baseUri;
   for (const [key, value] of Object.entries(node)) {
     result[key] = key === "$id" ? base : walk(value, base);
   }
   return result;
 }
-function absolute(uri, baseUri) {
+function absolute$1(uri, baseUri) {
   try {
     return new URL(uri, baseUri).href;
   } catch (error) {
@@ -14044,9 +14044,1029 @@ class OoldRefResolver {
     return baseUri ? `${baseUri}::${ref}` : ref;
   }
 }
+class RequestCache {
+  constructor(options = {}) {
+    this.enabled = options.cache !== false;
+    this.entries = /* @__PURE__ */ new Map();
+  }
+  async run(key, produce) {
+    if (!this.enabled) {
+      return produce();
+    }
+    if (this.entries.has(key)) {
+      return this.entries.get(key);
+    }
+    const pending = Promise.resolve().then(produce).catch((error) => {
+      this.entries.delete(key);
+      throw error;
+    });
+    this.entries.set(key, pending);
+    return pending;
+  }
+  forget(key) {
+    this.entries.delete(key);
+  }
+  clear() {
+    this.entries.clear();
+  }
+}
+class Batcher {
+  constructor(run, options = {}) {
+    this.run = run;
+    this.wait = options.wait ?? 0;
+    this.maxBatch = options.maxBatch ?? 200;
+    this.queue = [];
+    this.timer = null;
+  }
+  lookup(key) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ key, resolve, reject });
+      if (this.queue.length >= this.maxBatch) {
+        this.flush();
+        return;
+      }
+      if (this.timer === null) {
+        this.timer = setTimeout(() => this.flush(), this.wait);
+      }
+    });
+  }
+  flush() {
+    if (this.timer !== null) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    const batch = this.queue.splice(0, this.queue.length);
+    if (!batch.length) {
+      return;
+    }
+    const keys = [...new Set(batch.map((entry) => entry.key))];
+    Promise.resolve().then(() => this.run(keys)).then((result) => {
+      const map = result ?? {};
+      for (const entry of batch) {
+        entry.resolve(map[entry.key]);
+      }
+    }).catch((error) => {
+      for (const entry of batch) {
+        entry.reject(error);
+      }
+    });
+  }
+}
+function markNotSupported(target, names) {
+  for (const name of names) {
+    target.prototype[name].notSupported = true;
+  }
+}
+function supports(store, method) {
+  return Boolean(store) && typeof store[method] === "function" && store[method].notSupported !== true;
+}
+class SchemaStore {
+  constructor(options = {}) {
+    this.cache = new RequestCache(options);
+    this.fetch = options.fetch ?? (typeof fetch === "function" ? fetch.bind(globalThis) : void 0);
+    this.fetchOptions = options.fetchOptions ?? {};
+  }
+  async resolve(uri) {
+    if (!this.fetch) {
+      return { ok: false, status: 0, json: async () => null };
+    }
+    return this.cache.run(`schema:${uri}`, () => this.fetch(uri, this.fetchOptions));
+  }
+  /**
+   * Returns the classes a module contains, as absolute schema URIs.
+   * Needed to build a class tree, since OO-LD has no children index.
+   */
+  async listClasses() {
+    return [];
+  }
+  /**
+   * Hands jedison's RefParser a fetch bound to this store.
+   */
+  toFetch() {
+    return (uri, options) => this.resolve(uri, options);
+  }
+}
+markNotSupported(SchemaStore, ["listClasses"]);
+class InstanceStore {
+  constructor(options = {}) {
+    this.cache = new RequestCache(options);
+    this.language = options.language ?? "en";
+    this.labelBatcher = new Batcher((ids) => this.getLabels(ids, this.language), options);
+  }
+  /**
+   * Returns [{id, label, description, image, type, raw}].
+   *
+   * `spec` is the resolved range plus whatever source configuration the schema
+   * carried, `formValue` is the current document so a query can filter on a
+   * sibling field.
+   */
+  async search() {
+    return [];
+  }
+  /**
+   * Maps identifiers to display labels.
+   *
+   * Must accept whatever the store template produced, which is not necessarily
+   * an identifier the backend uses natively.
+   */
+  async getLabels() {
+    return {};
+  }
+  async load() {
+    return null;
+  }
+  async save() {
+    return null;
+  }
+  async remove() {
+    return false;
+  }
+  async getReverse() {
+    return [];
+  }
+  /**
+   * Single-identifier label lookup that joins the batch.
+   */
+  async getLabel(id, language) {
+    if (!supports(this, "getLabels")) {
+      return void 0;
+    }
+    if (language) {
+      this.language = language;
+    }
+    return this.labelBatcher.lookup(id);
+  }
+}
+markNotSupported(InstanceStore, ["search", "getLabels", "load", "save", "remove", "getReverse"]);
+class ClassIndex {
+  constructor(options = {}) {
+    this.cache = new RequestCache(options);
+  }
+  async getSubclasses() {
+    return [];
+  }
+  async getSuperclasses() {
+    return [];
+  }
+  async getMetaclasses() {
+    return [];
+  }
+}
+markNotSupported(ClassIndex, ["getSubclasses", "getSuperclasses", "getMetaclasses"]);
+class Backend {
+  constructor(options = {}) {
+    this.name = options.name ?? "backend";
+    this.schemas = options.schemas ?? new SchemaStore(options);
+    this.instances = options.instances ?? new InstanceStore(options);
+    this.classes = options.classes ?? new ClassIndex(options);
+    this.overrides = options.capabilities ?? {};
+  }
+  get capabilities() {
+    const derived = {
+      canSearch: supports(this.instances, "search"),
+      canLabel: supports(this.instances, "getLabels"),
+      canLoad: supports(this.instances, "load"),
+      canCreate: supports(this.instances, "save"),
+      canEdit: supports(this.instances, "save") && supports(this.instances, "load"),
+      canDelete: supports(this.instances, "remove"),
+      canReverse: supports(this.instances, "getReverse"),
+      hasHierarchy: supports(this.classes, "getSubclasses"),
+      hasAncestors: supports(this.classes, "getSuperclasses"),
+      hasMetaclasses: supports(this.classes, "getMetaclasses"),
+      canListClasses: supports(this.schemas, "listClasses")
+    };
+    const result = {};
+    for (const [key, value] of Object.entries(derived)) {
+      result[key] = key in this.overrides ? Boolean(this.overrides[key]) && value : value;
+    }
+    return result;
+  }
+  can(capability) {
+    return this.capabilities[capability] === true;
+  }
+  /**
+   * The fetch to hand to jedison as options.fetch, so $ref resolution goes
+   * through this backend.
+   */
+  toFetch() {
+    return this.schemas.toFetch();
+  }
+  clearCaches() {
+    for (const store of [this.schemas, this.instances, this.classes]) {
+      if (store && store.cache && typeof store.cache.clear === "function") {
+        store.cache.clear();
+      }
+    }
+  }
+}
+function absolute(uri, base) {
+  try {
+    return new URL(uri, base || void 0).href;
+  } catch (error) {
+    return uri;
+  }
+}
+function normaliseText(value) {
+  return isString(value) ? value.toLowerCase() : "";
+}
+class StaticSchemaStore extends SchemaStore {
+  constructor(options = {}) {
+    super(options);
+    this.baseUri = options.baseUri ?? "";
+    this.documents = /* @__PURE__ */ new Map();
+    for (const [uri, schema] of Object.entries(options.schemas ?? {})) {
+      this.documents.set(absolute(uri, this.baseUri), schema);
+    }
+  }
+  async resolve(uri) {
+    const key = absolute(uri, this.baseUri);
+    if (this.documents.has(key)) {
+      const schema = this.documents.get(key);
+      return { ok: true, status: 200, json: async () => schema };
+    }
+    return super.resolve(key);
+  }
+  async listClasses() {
+    return [...this.documents.keys()];
+  }
+  /**
+   * Loads every schema a module manifest names, so the class index has the
+   * edges it needs. OO-LD has no children index, which is why this is a scan.
+   */
+  async loadModule(manifestUri) {
+    const uri = absolute(manifestUri, this.baseUri);
+    const response = await super.resolve(uri);
+    if (!response || !response.ok) {
+      return [];
+    }
+    const manifest = await response.json();
+    const names = isArray(manifest == null ? void 0 : manifest.schemas) ? manifest.schemas : [];
+    const loaded = [];
+    for (const name of names) {
+      const schemaUri = absolute(name, uri);
+      const schemaResponse = await super.resolve(schemaUri);
+      if (!schemaResponse || !schemaResponse.ok) {
+        continue;
+      }
+      const schema = await schemaResponse.json();
+      if (isObject$1(schema)) {
+        this.documents.set(schemaUri, schema);
+        loaded.push(schemaUri);
+      }
+    }
+    return loaded;
+  }
+  get(uri) {
+    return this.documents.get(absolute(uri, this.baseUri));
+  }
+  set(uri, schema) {
+    this.documents.set(absolute(uri, this.baseUri), schema);
+  }
+}
+class StaticClassIndex extends ClassIndex {
+  constructor(options = {}) {
+    super(options);
+    this.store = options.store;
+    this.allRefs = options.allRefs === true;
+  }
+  parentsOf(uri) {
+    const schema = this.store.get(uri);
+    if (!isObject$1(schema) || !isArray(schema.allOf)) {
+      return [];
+    }
+    const refs = schema.allOf.filter((branch) => isObject$1(branch) && isString(branch.$ref)).map((branch) => absolute(branch.$ref, uri));
+    return this.allRefs ? refs : refs.slice(0, 1);
+  }
+  async getSuperclasses(classRef) {
+    const seen = /* @__PURE__ */ new Set();
+    const chain = [];
+    let current = [classRef];
+    while (current.length) {
+      const next = [];
+      for (const uri of current) {
+        for (const parent of this.parentsOf(uri)) {
+          if (seen.has(parent)) {
+            continue;
+          }
+          seen.add(parent);
+          chain.push(parent);
+          next.push(parent);
+        }
+      }
+      current = next;
+    }
+    return chain;
+  }
+  async getSubclasses(classRef, options = {}) {
+    const depth = options.depth ?? 1;
+    const uris = await this.store.listClasses();
+    const direct = uris.filter((uri) => this.parentsOf(uri).includes(classRef));
+    if (depth <= 1) {
+      return direct;
+    }
+    const result = [...direct];
+    for (const child of direct) {
+      const deeper = await this.getSubclasses(child, { depth: depth - 1 });
+      for (const uri of deeper) {
+        if (!result.includes(uri)) {
+          result.push(uri);
+        }
+      }
+    }
+    return result;
+  }
+  /**
+   * A metaclass is what a class is an instance of, which OO-LD expresses as the
+   * class's own instance rdf type rather than as a composition edge.
+   */
+  async getMetaclasses(classRef) {
+    const schema = this.store.get(classRef);
+    const types = schema == null ? void 0 : schema["x-oold-instance-rdf-type"];
+    return isArray(types) ? types : [];
+  }
+}
+class StaticInstanceStore extends InstanceStore {
+  constructor(options = {}) {
+    super(options);
+    this.records = /* @__PURE__ */ new Map();
+    this.nextId = 1;
+    this.idPrefix = options.idPrefix ?? "urn:oold:";
+    for (const record of options.instances ?? []) {
+      if (isObject$1(record) && isString(record.id)) {
+        this.records.set(record.id, { ...record });
+      }
+    }
+  }
+  matchesRange(record, spec) {
+    const classes = spec == null ? void 0 : spec.classes;
+    if (!isArray(classes) || !classes.length) {
+      return true;
+    }
+    const types = isArray(record.type) ? record.type : [record.type].filter(Boolean);
+    return types.some((type2) => classes.includes(type2));
+  }
+  async search(spec, userInput = "", formValue = void 0, language = void 0) {
+    const needle = normaliseText(userInput);
+    const limit = (spec == null ? void 0 : spec.limit) ?? 25;
+    const results = [];
+    for (const record of this.records.values()) {
+      if (!this.matchesRange(record, spec)) {
+        continue;
+      }
+      const haystack = `${normaliseText(record.label)} ${normaliseText(record.description)}`;
+      if (needle && !haystack.includes(needle)) {
+        continue;
+      }
+      results.push({
+        id: record.id,
+        label: record.label,
+        description: record.description,
+        image: record.image,
+        type: record.type,
+        raw: record
+      });
+    }
+    results.sort((a, b) => normaliseText(a.label).length - normaliseText(b.label).length);
+    return results.slice(0, limit);
+  }
+  async getLabels(ids) {
+    const map = {};
+    for (const id of isArray(ids) ? ids : []) {
+      const record = this.records.get(id);
+      if (record) {
+        map[id] = record.label;
+      }
+    }
+    return map;
+  }
+  async load(id) {
+    const record = this.records.get(id);
+    return record ? { ...record } : null;
+  }
+  async save(entity) {
+    const id = isString(entity == null ? void 0 : entity.id) && entity.id !== "" ? entity.id : `${this.idPrefix}${this.nextId++}`;
+    this.records.set(id, { ...entity, id });
+    return { id };
+  }
+  async remove(id) {
+    return this.records.delete(id);
+  }
+  async getReverse(property, subjectId) {
+    const found = [];
+    for (const record of this.records.values()) {
+      const value = record[property];
+      const values = isArray(value) ? value : [value];
+      if (values.includes(subjectId)) {
+        found.push(record.id);
+      }
+    }
+    return found;
+  }
+}
+function createStaticBackend(options = {}) {
+  const schemas = new StaticSchemaStore(options);
+  const classes = new StaticClassIndex({ ...options, store: schemas });
+  const instances = new StaticInstanceStore(options);
+  return new Backend({ ...options, name: options.name ?? "static", schemas, classes, instances });
+}
+function expandTemplate(template, values) {
+  if (!isString(template)) {
+    return "";
+  }
+  return template.replace(/\{([^}]+)\}/g, (match, key) => {
+    const value = values[key];
+    return value === void 0 || value === null ? "" : encodeURIComponent(String(value));
+  });
+}
+function readPath(value, path) {
+  if (!isString(path) || path === "") {
+    return value;
+  }
+  let current = [value];
+  for (const segment of path.replace(/^\$\.?/, "").split(".")) {
+    if (segment === "") {
+      continue;
+    }
+    const next = [];
+    const isEach = segment.endsWith("[]");
+    const key = isEach ? segment.slice(0, -2) : segment;
+    for (const entry of current) {
+      const picked = key === "" ? entry : isObject$1(entry) || isArray(entry) ? entry[key] : void 0;
+      if (isEach && isArray(picked)) {
+        next.push(...picked);
+      } else if (picked !== void 0) {
+        next.push(picked);
+      }
+    }
+    current = next;
+  }
+  return current.length <= 1 ? current[0] : current;
+}
+const DEFAULT_MAPPING = {
+  id: "id",
+  label: "label",
+  description: "description",
+  image: "image",
+  type: "type"
+};
+function mapRecord(raw, mapping) {
+  const result = { raw };
+  for (const [field, path] of Object.entries({ ...DEFAULT_MAPPING, ...mapping })) {
+    result[field] = readPath(raw, path);
+  }
+  return result;
+}
+class RestSchemaStore extends SchemaStore {
+  constructor(options = {}) {
+    super(options);
+    this.schemaTemplate = options.schemaTemplate;
+    this.classListUrl = options.classListUrl;
+    this.classListPath = options.classListPath ?? "schemas[]";
+  }
+  async resolve(uri) {
+    const target = this.schemaTemplate ? expandTemplate(this.schemaTemplate, { uri, id: uri }) : uri;
+    return super.resolve(target);
+  }
+  async listClasses() {
+    if (!this.classListUrl) {
+      return [];
+    }
+    const response = await super.resolve(this.classListUrl);
+    if (!response || !response.ok) {
+      return [];
+    }
+    const body = await response.json();
+    const listed = readPath(body, this.classListPath);
+    return isArray(listed) ? listed : [listed].filter(Boolean);
+  }
+}
+class RestInstanceStore extends InstanceStore {
+  constructor(options = {}) {
+    super(options);
+    this.fetch = options.fetch ?? (typeof fetch === "function" ? fetch.bind(globalThis) : void 0);
+    this.fetchOptions = options.fetchOptions ?? {};
+    this.searchTemplate = options.searchTemplate;
+    this.labelsTemplate = options.labelsTemplate;
+    this.loadTemplate = options.loadTemplate;
+    this.saveUrl = options.saveUrl;
+    this.reverseTemplate = options.reverseTemplate;
+    this.resultsPath = options.resultsPath ?? "";
+    this.mapping = options.mapping ?? {};
+  }
+  async request(url, init) {
+    if (!this.fetch || !url) {
+      return null;
+    }
+    const response = await this.fetch(url, { ...this.fetchOptions, ...init });
+    return response && response.ok ? response.json() : null;
+  }
+  async search(spec, userInput = "", formValue = void 0, language = void 0) {
+    const url = expandTemplate(this.searchTemplate, {
+      input: userInput,
+      lang: language ?? this.language,
+      limit: (spec == null ? void 0 : spec.limit) ?? 25,
+      class: isArray(spec == null ? void 0 : spec.classes) ? spec.classes[0] : "",
+      classes: isArray(spec == null ? void 0 : spec.classes) ? spec.classes.join(",") : ""
+    });
+    const body = await this.request(url);
+    if (body === null) {
+      return [];
+    }
+    const rows = readPath(body, this.resultsPath);
+    return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping));
+  }
+  async getLabels(ids, language) {
+    const wanted = isArray(ids) ? ids : [];
+    if (!wanted.length) {
+      return {};
+    }
+    const url = expandTemplate(this.labelsTemplate, {
+      ids: wanted.join(","),
+      lang: language ?? this.language
+    });
+    const body = await this.request(url);
+    if (body === null) {
+      return {};
+    }
+    const rows = readPath(body, this.resultsPath);
+    const map = {};
+    for (const row of isArray(rows) ? rows : [rows].filter(Boolean)) {
+      const record = mapRecord(row, this.mapping);
+      if (isString(record.id)) {
+        map[record.id] = record.label;
+      }
+    }
+    return map;
+  }
+  async load(id) {
+    return this.request(expandTemplate(this.loadTemplate, { id }));
+  }
+  async save(entity) {
+    if (!this.saveUrl) {
+      return null;
+    }
+    const saved = await this.request(this.saveUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...this.fetchOptions.headers ?? {} },
+      body: JSON.stringify(entity)
+    });
+    return saved ?? null;
+  }
+  async getReverse(property, subjectId) {
+    const body = await this.request(expandTemplate(this.reverseTemplate, { property, id: subjectId }));
+    if (body === null) {
+      return [];
+    }
+    const rows = readPath(body, this.resultsPath);
+    return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping).id).filter(isString);
+  }
+}
+class RestClassIndex extends ClassIndex {
+  constructor(options = {}) {
+    super(options);
+    this.fetch = options.fetch ?? (typeof fetch === "function" ? fetch.bind(globalThis) : void 0);
+    this.fetchOptions = options.fetchOptions ?? {};
+    this.subclassTemplate = options.subclassTemplate;
+    this.superclassTemplate = options.superclassTemplate;
+    this.resultsPath = options.resultsPath ?? "";
+    this.mapping = options.mapping ?? {};
+  }
+  async list(template, values) {
+    const url = expandTemplate(template, values);
+    if (!this.fetch || !url) {
+      return [];
+    }
+    const response = await this.fetch(url, this.fetchOptions);
+    if (!response || !response.ok) {
+      return [];
+    }
+    const rows = readPath(await response.json(), this.resultsPath);
+    return (isArray(rows) ? rows : [rows].filter(Boolean)).map((row) => mapRecord(row, this.mapping).id).filter(isString);
+  }
+  async getSubclasses(classRef, options = {}) {
+    return this.list(this.subclassTemplate, { class: classRef, depth: options.depth ?? 1 });
+  }
+  async getSuperclasses(classRef) {
+    return this.list(this.superclassTemplate, { class: classRef });
+  }
+}
+function createRestBackend(options = {}) {
+  const schemas = new RestSchemaStore(options);
+  const instances = new RestInstanceStore(options);
+  const classes = new RestClassIndex(options);
+  const capabilities = {
+    canSearch: Boolean(options.searchTemplate),
+    canLabel: Boolean(options.labelsTemplate),
+    canLoad: Boolean(options.loadTemplate),
+    canCreate: Boolean(options.saveUrl),
+    canEdit: Boolean(options.saveUrl && options.loadTemplate),
+    canReverse: Boolean(options.reverseTemplate),
+    hasHierarchy: Boolean(options.subclassTemplate),
+    hasAncestors: Boolean(options.superclassTemplate),
+    canListClasses: Boolean(options.classListUrl),
+    ...options.capabilities ?? {}
+  };
+  return new Backend({ ...options, name: options.name ?? "rest", schemas, instances, classes, capabilities });
+}
+const RESULTS_ACCEPT = "application/sparql-results+json";
+function escapeLiteral(value) {
+  return String(value ?? "").replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n").replace(/\r/g, "\\r").replace(/\t/g, "\\t");
+}
+function escapeIri(value) {
+  return String(value ?? "").replace(/[<>"{}|^`\\\s]/g, "");
+}
+function fillQuery(template, values) {
+  if (!isString(template)) {
+    return "";
+  }
+  return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
+    if (key.endsWith("Iri")) {
+      return escapeIri(values[key.slice(0, -3)] ?? values[key]);
+    }
+    return escapeLiteral(values[key]);
+  });
+}
+function bindingsToRecords(body, mapping = {}) {
+  var _a;
+  const names = {
+    id: "id",
+    label: "label",
+    description: "description",
+    image: "image",
+    type: "type",
+    ...mapping
+  };
+  const bindings = (_a = body == null ? void 0 : body.results) == null ? void 0 : _a.bindings;
+  if (!isArray(bindings)) {
+    return [];
+  }
+  return bindings.map((binding) => {
+    var _a2;
+    const record = { raw: binding };
+    for (const [field, variable] of Object.entries(names)) {
+      record[field] = (_a2 = binding[variable]) == null ? void 0 : _a2.value;
+    }
+    return record;
+  });
+}
+const DEFAULT_QUERIES = {
+  search: `SELECT ?id ?label ?description WHERE {
+  ?id rdfs:label ?label .
+  OPTIONAL { ?id rdfs:comment ?description }
+  FILTER(CONTAINS(LCASE(STR(?label)), LCASE("{{input}}")))
+} LIMIT {{limit}}`,
+  labels: `SELECT ?id ?label WHERE {
+  VALUES ?id { {{idList}} }
+  ?id rdfs:label ?label .
+}`,
+  subclasses: `SELECT ?id ?label WHERE {
+  ?id rdfs:subClassOf <{{classIri}}> .
+  OPTIONAL { ?id rdfs:label ?label }
+}`,
+  superclasses: `SELECT ?id ?label WHERE {
+  <{{classIri}}> rdfs:subClassOf+ ?id .
+  OPTIONAL { ?id rdfs:label ?label }
+}`
+};
+const WIKIDATA_QUERIES = {
+  search: `SELECT ?id ?label ?description WHERE {
+  ?id rdfs:label ?label .
+  FILTER(LANG(?label) = "{{lang}}")
+  FILTER(CONTAINS(LCASE(?label), LCASE("{{input}}")))
+  OPTIONAL { ?id schema:description ?description FILTER(LANG(?description) = "{{lang}}") }
+  ?id wdt:P31 <{{classIri}}> .
+} LIMIT {{limit}}`,
+  labels: `SELECT ?id ?label WHERE {
+  VALUES ?id { {{idList}} }
+  ?id rdfs:label ?label .
+  FILTER(LANG(?label) = "{{lang}}")
+}`,
+  subclasses: `SELECT ?id ?label WHERE {
+  ?id wdt:P279 <{{classIri}}> .
+  OPTIONAL { ?id rdfs:label ?label FILTER(LANG(?label) = "{{lang}}") }
+} LIMIT {{limit}}`,
+  superclasses: `SELECT ?id ?label WHERE {
+  <{{classIri}}> wdt:P279+ ?id .
+  OPTIONAL { ?id rdfs:label ?label FILTER(LANG(?label) = "{{lang}}") }
+} LIMIT {{limit}}`
+};
+class SparqlClient {
+  constructor(options = {}) {
+    this.endpoint = options.endpoint;
+    this.fetch = options.fetch ?? (typeof fetch === "function" ? fetch.bind(globalThis) : void 0);
+    this.fetchOptions = options.fetchOptions ?? {};
+    this.queries = { ...DEFAULT_QUERIES, ...options.queries ?? {} };
+    this.mapping = options.mapping ?? {};
+    this.language = options.language ?? "en";
+    this.limit = options.limit ?? 25;
+  }
+  async select(name, values) {
+    const query = fillQuery(this.queries[name], {
+      lang: this.language,
+      limit: this.limit,
+      ...values
+    });
+    if (!this.fetch || !this.endpoint || query === "") {
+      return [];
+    }
+    const url = `${this.endpoint}?query=${encodeURIComponent(query)}`;
+    const response = await this.fetch(url, {
+      ...this.fetchOptions,
+      headers: { accept: RESULTS_ACCEPT, ...this.fetchOptions.headers ?? {} }
+    });
+    if (!response || !response.ok) {
+      return [];
+    }
+    return bindingsToRecords(await response.json(), this.mapping);
+  }
+}
+class SparqlInstanceStore extends InstanceStore {
+  constructor(options = {}) {
+    super(options);
+    this.client = new SparqlClient(options);
+  }
+  async search(spec, userInput = "", formValue = void 0, language = void 0) {
+    return this.client.select("search", {
+      input: userInput,
+      class: isArray(spec == null ? void 0 : spec.classes) ? spec.classes[0] : "",
+      lang: language ?? this.language,
+      limit: (spec == null ? void 0 : spec.limit) ?? this.client.limit
+    });
+  }
+  async getLabels(ids, language) {
+    const wanted = (isArray(ids) ? ids : []).filter(isString);
+    if (!wanted.length) {
+      return {};
+    }
+    const idList = wanted.map((id) => `<${escapeIri(id)}>`).join(" ");
+    const records = await this.client.select("labels", { idList, lang: language ?? this.language });
+    const map = {};
+    for (const record of records) {
+      if (isString(record.id)) {
+        map[record.id] = record.label;
+      }
+    }
+    return map;
+  }
+}
+class SparqlClassIndex extends ClassIndex {
+  constructor(options = {}) {
+    super(options);
+    this.client = new SparqlClient(options);
+  }
+  async getSubclasses(classRef) {
+    const records = await this.client.select("subclasses", { class: classRef });
+    return records.map((record) => record.id).filter(isString);
+  }
+  async getSuperclasses(classRef) {
+    const records = await this.client.select("superclasses", { class: classRef });
+    return records.map((record) => record.id).filter(isString);
+  }
+}
+function createSparqlBackend(options = {}) {
+  const schemas = new SchemaStore(options);
+  const instances = new SparqlInstanceStore(options);
+  const classes = new SparqlClassIndex(options);
+  return new Backend({ ...options, name: options.name ?? "sparql", schemas, instances, classes });
+}
+const DEFAULT_PROPERTIES = {
+  label: "HasLabel",
+  image: "HasImage",
+  description: "HasDescription",
+  type: "HasType.Display_title_of",
+  uuid: "HasUuid",
+  subclassOf: "SubClassOf",
+  displayTitle: "Display_title_of",
+  normalizedLabel: "HasNormalizedLabel"
+};
+function subclassChainQuery(classRef, property, depth, includeSelf) {
+  const parts = includeSelf ? [`[[:${classRef}]]`] : [];
+  for (let level = 1; level <= depth; level++) {
+    const chain = Array(level).fill(property).join(".");
+    parts.push(`[[${chain}::${classRef}]]`);
+  }
+  return parts.join("OR");
+}
+function escapeAsk(value) {
+  return String(value ?? "").replace(/[[\]|{}]/g, " ").trim();
+}
+class AskClient {
+  constructor(options = {}) {
+    this.apiUrl = options.apiUrl;
+    this.fetch = options.fetch ?? (typeof fetch === "function" ? fetch.bind(globalThis) : void 0);
+    this.fetchOptions = options.fetchOptions ?? {};
+    this.properties = { ...DEFAULT_PROPERTIES, ...options.properties ?? {} };
+    this.limit = options.limit ?? 25;
+    this.language = options.language ?? "en";
+  }
+  printouts() {
+    const { label, image, description, type: type2 } = this.properties;
+    return `|?${label}=label|?${image}=image|?${description}=description|?${type2}=type`;
+  }
+  async ask(query) {
+    var _a;
+    if (!this.fetch || !this.apiUrl || !query) {
+      return {};
+    }
+    const url = `${this.apiUrl}?action=ask&format=json&origin=*&query=${encodeURIComponent(query)}`;
+    const response = await this.fetch(url, this.fetchOptions);
+    if (!response || !response.ok) {
+      return {};
+    }
+    const body = await response.json();
+    return ((_a = body == null ? void 0 : body.query) == null ? void 0 : _a.results) ?? {};
+  }
+  toRecords(results) {
+    return Object.entries(results).map(([title, row]) => {
+      const printouts = (row == null ? void 0 : row.printouts) ?? {};
+      return {
+        id: title,
+        label: first(printouts.label) ?? (row == null ? void 0 : row.displaytitle) ?? (row == null ? void 0 : row.fulltext) ?? title,
+        description: first(printouts.description),
+        image: first(printouts.image),
+        type: first(printouts.type),
+        raw: row
+      };
+    });
+  }
+}
+function first(value) {
+  if (!isArray(value) || !value.length) {
+    return void 0;
+  }
+  const entry = value[0];
+  return isObject$1(entry) ? entry.fulltext ?? entry.displaytitle : entry;
+}
+class OswSchemaStore extends SchemaStore {
+  constructor(options = {}) {
+    super(options);
+    this.wikiUrl = options.wikiUrl;
+    this.slot = options.slot ?? "jsonschema";
+  }
+  /**
+   * A class is a Category page and its schema lives in a page slot, so a class
+   * identifier has to be rewritten into a raw-slot URL before retrieval.
+   */
+  toSlotUrl(uri) {
+    if (!this.wikiUrl || /^https?:/.test(uri)) {
+      return uri;
+    }
+    return `${this.wikiUrl}/index.php?title=${encodeURIComponent(uri)}&action=raw&slot=${this.slot}`;
+  }
+  async resolve(uri) {
+    return super.resolve(this.toSlotUrl(uri));
+  }
+}
+class OswInstanceStore extends InstanceStore {
+  constructor(options = {}) {
+    super(options);
+    this.client = new AskClient(options);
+  }
+  buildQuery(spec, userInput) {
+    const { normalizedLabel } = this.client.properties;
+    const conditions = [];
+    const classes = isArray(spec == null ? void 0 : spec.classes) ? spec.classes : [];
+    if (classes.length) {
+      conditions.push(classes.map((entry) => `[[${escapeAsk(entry)}]]`).join("OR"));
+    }
+    if (userInput) {
+      conditions.push(`[[${normalizedLabel}::like:*${escapeAsk(userInput)}*]]`);
+    }
+    if (!conditions.length) {
+      conditions.push("[[:+]]");
+    }
+    const limit = (spec == null ? void 0 : spec.limit) ?? this.client.limit;
+    return `${conditions.join("")}${this.client.printouts()}|limit=${limit}`;
+  }
+  async search(spec, userInput = "") {
+    const results = await this.client.ask(this.buildQuery(spec, userInput));
+    return this.client.toRecords(results);
+  }
+  /**
+   * Accepts both a page title and an IRI, because a store template commonly
+   * writes an IRI while the wiki is keyed by title.
+   */
+  async getLabels(ids) {
+    var _a, _b;
+    const wanted = (isArray(ids) ? ids : []).filter(isString);
+    if (!wanted.length) {
+      return {};
+    }
+    const { label, uuid } = this.client.properties;
+    const conditions = wanted.map((id) => /^https?:/.test(id) ? `[[${uuid}::${escapeAsk(id)}]]` : `[[:${escapeAsk(id)}]]`).join("OR");
+    const results = await this.client.ask(`${conditions}|?${label}=label|?${uuid}=uuid|limit=${wanted.length}`);
+    const map = {};
+    for (const [title, row] of Object.entries(results)) {
+      const resolved = first((_a = row == null ? void 0 : row.printouts) == null ? void 0 : _a.label) ?? (row == null ? void 0 : row.displaytitle) ?? title;
+      map[title] = resolved;
+      const id = first((_b = row == null ? void 0 : row.printouts) == null ? void 0 : _b.uuid);
+      if (isString(id) && wanted.includes(id)) {
+        map[id] = resolved;
+      }
+    }
+    return map;
+  }
+  async load(id) {
+    var _a, _b, _c, _d, _e, _f;
+    if (!this.client.fetch || !this.client.apiUrl) {
+      return null;
+    }
+    const url = `${this.client.apiUrl}?action=query&format=json&origin=*&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(id)}`;
+    const response = await this.client.fetch(url, this.client.fetchOptions);
+    if (!response || !response.ok) {
+      return null;
+    }
+    const pages = ((_b = (_a = await response.json()) == null ? void 0 : _a.query) == null ? void 0 : _b.pages) ?? {};
+    const page = Object.values(pages)[0];
+    if (!page || page.missing !== void 0) {
+      return null;
+    }
+    const content = (_f = (_e = (_d = (_c = page == null ? void 0 : page.revisions) == null ? void 0 : _c[0]) == null ? void 0 : _d.slots) == null ? void 0 : _e.main) == null ? void 0 : _f["*"];
+    try {
+      return isString(content) ? JSON.parse(content) : null;
+    } catch (error) {
+      return null;
+    }
+  }
+}
+class OswClassIndex extends ClassIndex {
+  constructor(options = {}) {
+    super(options);
+    this.client = new AskClient(options);
+    this.depth = options.subclassDepth ?? 5;
+  }
+  async getSubclasses(classRef, options = {}) {
+    const { subclassOf, label } = this.client.properties;
+    const depth = options.depth ?? 1;
+    const query = subclassChainQuery(escapeAsk(classRef), subclassOf, depth, false);
+    const results = await this.client.ask(`${query}|?${label}=label|limit=${this.client.limit}`);
+    return Object.keys(results);
+  }
+  async getSuperclasses(classRef) {
+    var _a;
+    const { subclassOf } = this.client.properties;
+    const chain = [];
+    const seen = /* @__PURE__ */ new Set([classRef]);
+    let current = classRef;
+    while (current) {
+      const results = await this.client.ask(`[[:${escapeAsk(current)}]]|?${subclassOf}=parent|limit=1`);
+      const row = Object.values(results)[0];
+      const parent = first((_a = row == null ? void 0 : row.printouts) == null ? void 0 : _a.parent);
+      if (!isString(parent) || seen.has(parent)) {
+        break;
+      }
+      seen.add(parent);
+      chain.push(parent);
+      current = parent;
+    }
+    return chain;
+  }
+}
+function createOswBackend(options = {}) {
+  const schemas = new OswSchemaStore(options);
+  const instances = new OswInstanceStore(options);
+  const classes = new OswClassIndex(options);
+  return new Backend({ ...options, name: options.name ?? "osw", schemas, instances, classes });
+}
+const index$1 = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
+  __proto__: null,
+  Backend,
+  Batcher,
+  ClassIndex,
+  DEFAULT_PROPERTIES,
+  InstanceStore,
+  OswClassIndex,
+  OswInstanceStore,
+  OswSchemaStore,
+  RequestCache,
+  RestClassIndex,
+  RestInstanceStore,
+  RestSchemaStore,
+  SchemaStore,
+  SparqlClassIndex,
+  SparqlInstanceStore,
+  StaticClassIndex,
+  StaticInstanceStore,
+  StaticSchemaStore,
+  WIKIDATA_QUERIES,
+  bindingsToRecords,
+  createOswBackend,
+  createRestBackend,
+  createSparqlBackend,
+  createStaticBackend,
+  escapeAsk,
+  escapeIri,
+  escapeLiteral,
+  expandTemplate,
+  fillQuery,
+  readPath,
+  subclassChainQuery,
+  supports
+}, Symbol.toStringTag, { value: "Module" }));
 const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty({
   __proto__: null,
   OoldRefResolver,
+  backend: index$1,
   constants,
   mapUiKeywords,
   mergeAllOf,

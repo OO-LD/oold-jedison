@@ -74,6 +74,23 @@ After a sync, check the upstream `CHANGELOG.md` for the range that came in. A re
 an extension point may mean a fork patch can be dropped, and a release that changes `RefParser`,
 `UiResolver` or the editor resolution order may mean one has to be rewritten.
 
+## Live backend tests
+
+`tests/unit/tests/oold-backend-live.test.js` queries the public endpoints the specification
+names, `query.wikidata.org` and `demo.open-semantic-lab.org`. It is skipped unless `OOLD_LIVE=1`,
+because a suite that fails when a third-party service is slow stops being evidence about this
+code.
+
+```bash
+OOLD_LIVE=1 npx --yes jest --config=./tests/unit/jest.config.cjs tests/unit/tests/oold-backend-live.test.js
+```
+
+Run it when a backend adapter changes. A mocked adapter only proves it agrees with the fixture
+its own author wrote, so these are what establish that the fixtures were not wishful.
+
+Not every Wikidata entity carries an English `rdfs:label` in the query service graph, so a live
+test asserts against one that demonstrably does rather than against a famous identifier.
+
 ## Before opening a pull request
 
 ```bash
