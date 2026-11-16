@@ -183,6 +183,39 @@ Scenario('@feature @oold reports what a switch dropped', ({ I }) => {
   I.see('#/email', '#oold-dropped')
 })
 
+Scenario('@feature @oold puts the label beside the input at dense', async ({ I }) => {
+  I._selectExample('oold/density', 25)
+  I.waitForElement('[data-path="#/label"] input', 10)
+  I.selectOption('#oold-density', 'dense')
+  I.waitForElement('#jedison-container[data-jedi-density="dense"]', 10)
+
+  const box = await I.executeScript(() => {
+    const c = document.querySelector('[data-path="#/label"]')
+    const l = c.querySelector('label').getBoundingClientRect()
+    const i = c.querySelector('input').getBoundingClientRect()
+    return { leftOf: Math.round(l.right) <= Math.round(i.left) + 2,
+             centred: Math.abs((l.top + l.height / 2) - (i.top + i.height / 2)) <= 4 }
+  })
+
+  I.assertEqual(box.leftOf, true)
+  I.assertEqual(box.centred, true)
+})
+
+Scenario('@feature @oold keeps a reference row the same height as a plain row', async ({ I }) => {
+  I._selectExample('oold/inline-create', 25)
+  I.waitForElement('[data-path="#/works_for"] input', 10)
+  I.selectOption('#oold-density', 'dense')
+  I.waitForElement('#jedison-container[data-jedi-density="dense"]', 10)
+
+  const diff = await I.executeScript(() => {
+    const h = (s) => document.querySelector(s).getBoundingClientRect().height
+    return Math.abs(h('[data-path="#/label"]') - h('[data-path="#/works_for"]'))
+  })
+
+  // The action buttons must not make a reference field taller than a text one.
+  I.assertTrue(diff <= 6)
+})
+
 Scenario('@feature @oold leaves the grid off until it is asked for', ({ I }) => {
   I._selectExample('oold/density', 25)
   I.waitForElement('[data-path="#/label"]', 10)

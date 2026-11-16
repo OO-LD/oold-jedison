@@ -179,6 +179,15 @@ const STYLE_TEXT = `
 [data-jedi-density="dense"] .mb-3 > *:not(label) {
   grid-column: 2;
 }
+/* An empty slot still occupies a grid row, which pushes the input onto the
+   row below the label it belongs to. Those slots are only filled when there
+   is something to show, so an empty one is taken out of the layout. */
+[data-jedi-density="dense"] .mb-3 > .jedi-switcher-slot:empty,
+[data-jedi-density="dense"] .mb-3 > .jedi-messages-slot:empty,
+[data-jedi-density="dense"] .mb-3 > .jedi-actions-slot:empty,
+[data-jedi-density="dense"] .mb-3 > .jedi-description:empty {
+  display: none;
+}
 /* An object or array keeps the full width; only leaf controls pair up. */
 [data-jedi-density="dense"] .mb-3:has(> fieldset),
 [data-jedi-density="dense"] .mb-3:has(> .jedi-array-control) {
