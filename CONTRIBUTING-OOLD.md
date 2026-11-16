@@ -91,15 +91,17 @@ its own author wrote, so these are what establish that the fixtures were not wis
 Not every Wikidata entity carries an English `rdfs:label` in the query service graph, so a live
 test asserts against one that demonstrably does rather than against a famous identifier.
 
-## Known end-to-end flake
+## A stale server on port 8181 looks like a test failure
 
-Whichever `@oold` scenario runs first fails its `_selectExample` wait roughly one run in
-two, and the same scenario passes when it is not first. A suite-level warm-up navigation did
-not remove it, and upstream shows the same pattern in its `@constraint` scenarios on a clean
-v1.31.1 checkout, so it is the harness rather than this code.
+`start-server-and-test` only starts its own server when the port is free. A preview server
+left over from an earlier run answers the check, so the suite runs against whatever that
+process is serving, and every scenario fails on a selector that is simply not in that build.
 
-Re-run before treating a single first-scenario failure as a regression. A failure in any
-other position is real.
+```bash
+npx --yes kill-port 8181
+```
+
+Run that first when the whole suite fails at once, particularly in the `BeforeSuite` hook.
 
 ## Before opening a pull request
 

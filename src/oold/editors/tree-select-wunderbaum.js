@@ -6,8 +6,8 @@ import EditorOoldTreeSelect from './tree-select.js'
  * The hierarchy rendered by Wunderbaum, when the host page has loaded it.
  *
  * Follows the same contract as every other third-party editor in the library:
- * nothing is bundled, `resolves` probes the global, and the themed list-group
- * editor stays as the fallback when the global is absent.
+ * nothing is bundled, `resolves` probes the global, and the themed rows stay
+ * as the fallback when the global is absent.
  *
  * Wunderbaum covers what a class browser needs without being assembled from
  * parts: lazy loading, multi-select, treegrid columns for metadata, and a
@@ -40,51 +40,44 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
    * Label plus the metadata columns. `*` is Wunderbaum's node-title column.
    */
   static defaultColumns () {
+    // Widths must be px or a plain number; anything else throws during the
+    // first viewport update and the tree renders empty.
     return [
-      { id: '*', title: 'Class', width: '20rem' },
-      { id: 'kind', title: 'Kind', width: '6rem' },
+      { id: '*', title: 'Entry', width: '280px' },
+      { id: 'kind', title: 'Kind', width: '90px' },
       { id: 'id', title: 'Identifier', width: '*' }
     ]
   }
 
-  build () {
-    super.build()
+  mountTree (host) {
+    this.treeContainer = host
 
-    // The themed rows are replaced, not layered over.
-    this.tree.textContent = ''
-    this.tree.classList.remove('list-group')
-    this.tree.classList.add('wb-skeleton', 'jedi-oold-tree-wb')
-    this.tree.style.minHeight = '12rem'
+    this.tree = document.createElement('div')
+    this.tree.classList.add('jedi-oold-tree', 'jedi-oold-tree-wb')
+    this.tree.setAttribute('id', `${this.getIdFromPath(this.instance.path)}-wb`)
+    this.tree.style.height = '24rem'
 
-    this.buildSearch()
+    this.buildSearch(host)
+    host.appendChild(this.tree)
+
     this.buildWunderbaum()
   }
 
-  buildSearch () {
-    if (getSchemaXOption(this.instance.schema, 'oold-tree-search') === false) {
+  /**
+   * Wunderbaum owns its search behaviour, so the base class box is rewired to
+   * its filter rather than to the themed row rendering.
+   */
+  applyFilter (text) {
+    if (!this.wunderbaum) {
       return
     }
 
-    const search = document.createElement('input')
-    search.setAttribute('type', 'search')
-    search.classList.add('form-control', 'jedi-oold-tree-search')
-    search.setAttribute('placeholder', 'Filter')
+    if (!text) {
+      this.wunderbaum.clearFilter()
+      return
+    }
 
-    search.addEventListener('input', () => {
-      if (!this.wunderbaum) {
-        return
-      }
-
-      if (search.value === '') {
-        this.wunderbaum.clearFilter()
-        return
-      }
-
-      this.wunderbaum.filterNodes(search.value, { mode: 'dim', fuzzy: false })
-    })
-
-    this.control.container.insertBefore(search, this.tree)
-    this.search = search
+    this.wunderbaum.filterNodes(String(text), { mode: 'hide', fuzzy: false })
   }
 
   buildWunderbaum () {
@@ -93,19 +86,25 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
 
     const options = {
       element: this.tree,
-      id: `${this.getIdFromPath(this.instance.path)}-wb`,
+      id: `${this.getIdFromPath(this.instance.path)}-wbtree`,
       selectMode: this.multiple ? 'multi' : 'single',
       checkbox: this.multiple,
-      filter: { mode: 'dim', autoApply: true },
-      source: (event) => this.loadRoots(event),
+      filter: { mode: 'hide', autoApply: true },
+      // source takes data, not a callback. A function here silently renders an
+      // empty tree, so the roots are loaded and handed over explicitly below.
+      source: [],
       lazyLoad: (event) => this.loadChildren(event),
       ...(getSchemaXOption(this.instance.schema, 'oold-wunderbaum') ?? {})
     }
 
-    // Columns turn the tree into a treegrid. Only worth it when there is more
-    // than the title to show.
     if (isArray(columns) && columns.length > 1) {
       options.columns = columns
+    }
+
+    if (isArray(options.columns)) {
+      // Extra columns stay empty unless they are written on render; the node
+      // data is not mapped onto them automatically.
+      options.render = (event) => this.renderColumns(event)
     }
 
     if (this.multiple) {
@@ -115,6 +114,33 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     }
 
     this.wunderbaum = new window.mar10.Wunderbaum(options)
+
+    this.controller.init()
+      .then((ids) => this.wunderbaum.load(this.nodesFor(ids)))
+      .then(() => this.restoreSelection())
+      .catch((error) => console.error('oold: wunderbaum load failed', error))
+  }
+
+  /**
+   * Fills the metadata columns from the node data.
+   */
+  renderColumns (event) {
+    const columns = event.allColInfosById
+
+    if (!columns || !event.node) {
+      return
+    }
+
+    const data = event.node.data ?? {}
+
+    for (const [id, info] of Object.entries(columns)) {
+      if (id === '*' || !info || !info.elem) {
+        continue
+      }
+
+      const value = data[id] ?? event.node[id]
+      info.elem.textContent = value === undefined || value === null ? '' : String(value)
+    }
   }
 
   /**
@@ -127,7 +153,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       title: entry.label ?? entry.id,
       lazy: entry.kind === 'class',
       type: entry.kind,
-      kind: entry.kind === 'class' ? 'Class' : 'Instance',
+      kind: entry.kind === 'class' ? 'class' : 'instance',
       id: entry.id
     }
   }
@@ -137,10 +163,6 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     const byId = new Map(snapshot.nodes.map((entry) => [entry.id, entry]))
 
     return (isArray(ids) ? ids : []).map((id) => this.toNode(byId.get(id) ?? { id, label: id, kind: 'class' }))
-  }
-
-  async loadRoots () {
-    return this.nodesFor(await this.controller.init())
   }
 
   async loadChildren (event) {
@@ -167,6 +189,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
 
       this.controller.setValue(keys)
       this.instance.setValue(keys, true, 'user')
+      this.renderPills()
       return
     }
 
@@ -175,26 +198,16 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
 
     this.controller.setValue(key)
     this.instance.setValue(key, true, 'user')
+    this.renderPills()
   }
 
-  /**
-   * The base class re-renders the themed rows on every controller change.
-   * Wunderbaum owns its own DOM, so that is suppressed here.
-   */
-  renderTree () {}
-
-  refreshUI () {
-    this.refreshDisabledState()
-
+  restoreSelection () {
     if (!this.wunderbaum) {
       return
     }
 
-    const value = this.instance.getValue()
-    const wanted = (isArray(value) ? value : [value]).filter(Boolean)
-
-    for (const key of wanted) {
-      const node = this.wunderbaum.findKey(key)
+    for (const id of this.selectedIds()) {
+      const node = this.wunderbaum.findKey(id)
 
       if (!node) {
         continue
@@ -208,13 +221,26 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     }
   }
 
-  destroy () {
+  /**
+   * The base class re-renders the themed rows on every controller change.
+   * Wunderbaum owns its own DOM, so that is suppressed here.
+   */
+  renderTree () {}
+
+  unmountTree () {
     if (this.wunderbaum && typeof this.wunderbaum.destroy === 'function') {
       this.wunderbaum.destroy()
     }
 
     this.wunderbaum = null
-    super.destroy()
+    super.unmountTree()
+  }
+
+  refreshUI () {
+    this.refreshDisabledState()
+    this.controller.setValue(this.instance.getValue())
+    this.renderPills()
+    this.restoreSelection()
   }
 }
 

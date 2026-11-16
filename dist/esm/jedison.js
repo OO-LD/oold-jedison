@@ -15827,6 +15827,9 @@ class EditorOoldAutocomplete extends EditorOoldRange {
     this.actionsGroup.style.display = empty ? "none" : "inline-flex";
   }
 }
+function shortName(id) {
+  return String(id).split(/[/#]/).filter(Boolean).pop().replace(/\.schema\.json$/, "");
+}
 class TreeController {
   constructor(options = {}) {
     this.backend = options.backend;
@@ -15929,15 +15932,41 @@ class TreeController {
   }
   async labelAll(ids) {
     const classes = ids.filter((id) => this.node(id).kind === "class");
-    if (!classes.length || !this.backend || !this.backend.can("canLabel")) {
+    if (!classes.length) {
       return;
     }
-    const labels = await this.backend.instances.getLabels(classes, this.language);
-    for (const [id, label] of Object.entries(labels ?? {})) {
-      if (label) {
-        this.node(id).label = label;
+    if (this.backend && this.backend.can("canLabel")) {
+      const labels = await this.backend.instances.getLabels(classes, this.language);
+      for (const [id, label] of Object.entries(labels ?? {})) {
+        if (label) {
+          this.node(id).label = label;
+        }
       }
     }
+    await Promise.all(classes.map((id) => this.labelClass(id)));
+  }
+  async labelClass(id) {
+    const node = this.node(id);
+    if (node.label !== id) {
+      return node.label;
+    }
+    if (!this.backend || !this.backend.schemas) {
+      node.label = shortName(id);
+      return node.label;
+    }
+    try {
+      const response = await this.backend.schemas.resolve(id);
+      if (response && response.ok) {
+        const schema = await response.json();
+        if (schema && typeof schema.title === "string" && schema.title !== "") {
+          node.label = schema.title;
+          return node.label;
+        }
+      }
+    } catch (error) {
+    }
+    node.label = shortName(id);
+    return node.label;
   }
   select(id) {
     if (this.multiple) {
@@ -15989,6 +16018,9 @@ class EditorOoldTreeSelect extends EditorString {
   get multiple() {
     return getSchemaType(this.instance.schema) === "array";
   }
+  get inline() {
+    return getSchemaXOption(this.instance.schema, "oold-tree-mode") === "inline";
+  }
   build() {
     const schema = this.instance.schema;
     const oold2 = getOoldOptions(this.instance);
@@ -16012,38 +16044,225 @@ class EditorOoldTreeSelect extends EditorString {
       showAncestors: oold2.hideAncestors !== true,
       language: oold2.language
     });
+    this.controller.on("change", (snapshot) => {
+      this.renderPills();
+      if (this.treeContainer) {
+        this.renderTree(snapshot);
+      }
+    });
+    this.buildField();
+    if (this.inline) {
+      this.openInline();
+    }
+  }
+  /**
+   * The closed state: pills for what is selected, and a hint when nothing is.
+   */
+  buildField() {
+    const field = document.createElement("div");
+    field.classList.add("jedi-oold-pills", "form-control", "d-flex", "flex-wrap", "align-items-center", "gap-1");
+    field.setAttribute("role", "button");
+    field.setAttribute("tabindex", "0");
+    field.style.cursor = "pointer";
+    field.style.minHeight = "calc(1.5em + .75rem + 2px)";
+    field.addEventListener("click", () => this.openPicker());
+    field.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.openPicker();
+      }
+    });
+    this.field = field;
+    this.control.container.insertBefore(field, this.control.description);
+    this.renderPills();
+  }
+  selectedIds() {
+    const value = this.instance.getValue();
+    return (isArray(value) ? value : [value]).filter((entry) => isSet(entry) && entry !== "");
+  }
+  renderPills() {
+    if (!this.field) {
+      return;
+    }
+    const ids = this.selectedIds();
+    this.field.textContent = "";
+    if (!ids.length) {
+      const placeholder = document.createElement("span");
+      placeholder.classList.add("jedi-oold-pills-empty", "text-muted");
+      placeholder.textContent = this.translate("oold.treeEmpty", "Click to browse");
+      this.field.appendChild(placeholder);
+      return;
+    }
+    for (const id of ids) {
+      this.field.appendChild(this.renderPill(id));
+    }
+  }
+  renderPill(id) {
+    const node = this.controller.nodes.get(id);
+    const pill = document.createElement("span");
+    pill.classList.add("jedi-oold-pill", "badge", "bg-secondary", "d-inline-flex", "align-items-center", "gap-1");
+    pill.setAttribute("data-oold-pill", id);
+    const label = document.createElement("span");
+    label.textContent = node ? node.label ?? id : id;
+    pill.appendChild(label);
+    const remove = document.createElement("button");
+    remove.setAttribute("type", "button");
+    remove.classList.add("jedi-oold-pill-remove", "btn-close", "btn-close-white");
+    remove.setAttribute("aria-label", this.translate("oold.remove", "Remove"));
+    remove.style.fontSize = ".5rem";
+    remove.addEventListener("click", (event) => {
+      event.stopPropagation();
+      this.deselect(id);
+    });
+    pill.appendChild(remove);
+    return pill;
+  }
+  translate(key, fallback) {
+    return this.instance.jedison.translator.translate(key) ?? fallback;
+  }
+  deselect(id) {
+    const remaining = this.selectedIds().filter((entry) => entry !== id);
+    this.controller.setValue(this.multiple ? remaining : remaining[0] ?? "");
+    this.instance.setValue(this.multiple ? remaining : remaining[0] ?? "", true, "user");
+  }
+  /**
+   * Inline mode renders the tree straight into the control, with no dialog.
+   */
+  openInline() {
+    const host = document.createElement("div");
+    host.classList.add("jedi-oold-tree-host");
+    this.control.container.insertBefore(host, this.control.description);
+    this.mountTree(host);
+  }
+  openPicker() {
+    if (this.dialog) {
+      return;
+    }
+    const dialog = this.theme.getDialog();
+    dialog.classList.add("jedi-oold-tree-dialog");
+    dialog.style.minWidth = "min(40rem, 92vw)";
+    const header = document.createElement("div");
+    header.classList.add("jedi-modal-title");
+    header.textContent = this.getTitle() ?? "";
+    const host = document.createElement("div");
+    host.classList.add("jedi-oold-tree-host");
+    const done = this.theme.getButton({ content: this.translate("oold.done", "Done"), icon: "save" });
+    done.classList.add("jedi-oold-tree-done");
+    done.setAttribute("always-enabled", "");
+    done.addEventListener("click", () => this.closePicker());
+    const actions = document.createElement("div");
+    actions.classList.add("jedi-oold-dialog-actions");
+    actions.style.display = "flex";
+    actions.style.justifyContent = "flex-end";
+    actions.style.marginTop = ".75rem";
+    actions.appendChild(done);
+    dialog.appendChild(header);
+    dialog.appendChild(host);
+    dialog.appendChild(actions);
+    dialog.addEventListener("cancel", (event) => {
+      event.preventDefault();
+      this.closePicker();
+    });
+    document.body.appendChild(dialog);
+    this.dialog = dialog;
+    dialog.showModal();
+    this.mountTree(host);
+  }
+  closePicker() {
+    if (!this.dialog) {
+      return;
+    }
+    this.unmountTree();
+    if (this.dialog.open) {
+      this.dialog.close();
+    }
+    if (this.dialog.parentNode) {
+      this.dialog.parentNode.removeChild(this.dialog);
+    }
+    this.dialog = null;
+    this.renderPills();
+  }
+  /**
+   * Subclass hook. The themed implementation builds a search box and a list
+   * group; Wunderbaum replaces both with its own widget.
+   */
+  mountTree(host) {
+    this.buildSearch(host);
     this.tree = document.createElement("div");
     this.tree.classList.add("jedi-oold-tree", "list-group");
     this.tree.setAttribute("role", "tree");
-    this.control.container.insertBefore(this.tree, this.control.description);
-    this.controller.on("change", (snapshot) => this.renderTree(snapshot));
-    this.controller.init();
+    this.tree.style.maxHeight = "24rem";
+    this.tree.style.overflowY = "auto";
+    host.appendChild(this.tree);
+    this.treeContainer = host;
+    this.controller.init().then(() => this.renderTree(this.controller.snapshot()));
+  }
+  unmountTree() {
+    this.tree = null;
+    this.treeContainer = null;
+    this.search = null;
+  }
+  buildSearch(host) {
+    if (getSchemaXOption(this.instance.schema, "oold-tree-search") === false) {
+      return;
+    }
+    const search = document.createElement("input");
+    search.setAttribute("type", "search");
+    search.classList.add("form-control", "jedi-oold-tree-search", "mb-2");
+    search.setAttribute("placeholder", this.translate("oold.filter", "Filter"));
+    search.addEventListener("input", () => this.applyFilter(search.value));
+    host.appendChild(search);
+    this.search = search;
+  }
+  /**
+   * Hides rows that do not match, keeping ancestors of matches visible so a
+   * match deep in the tree is still reachable.
+   */
+  applyFilter(text) {
+    this.filter = String(text ?? "").toLowerCase();
+    this.renderTree(this.controller.snapshot());
+  }
+  matches(node) {
+    if (!this.filter) {
+      return true;
+    }
+    return String(node.label ?? node.id).toLowerCase().includes(this.filter);
   }
   renderTree(snapshot) {
+    if (!this.tree) {
+      return;
+    }
     const byId = new Map(snapshot.nodes.map((node) => [node.id, node]));
     const expanded = new Set(snapshot.expanded);
     const selected = new Set(snapshot.selected);
-    const roots = this.controller.rootClasses;
-    const seen = /* @__PURE__ */ new Set();
     this.tree.textContent = "";
-    const renderNode = (id, depth) => {
-      if (seen.has(id)) {
-        return;
-      }
-      seen.add(id);
+    const append = (id, depth) => {
       const node = byId.get(id);
       if (!node) {
-        return;
+        return false;
       }
-      this.tree.appendChild(this.renderRow(node, depth, expanded, selected));
-      if (expanded.has(id) && isArray(node.children)) {
-        for (const child of node.children) {
-          renderNode(child, depth + 1);
+      const kids = expanded.has(id) && isArray(node.children) ? node.children : [];
+      const rendered = [];
+      let anyChild = false;
+      for (const child of kids) {
+        const childRows = append(child, depth + 1);
+        if (childRows) {
+          anyChild = true;
+          rendered.push(...childRows);
         }
       }
+      if (!this.matches(node) && !anyChild) {
+        return false;
+      }
+      return [this.renderRow(node, depth, expanded, selected), ...rendered];
     };
-    for (const root of roots) {
-      renderNode(root, 0);
+    for (const root of this.controller.rootClasses) {
+      const rows = append(root, 0);
+      if (rows) {
+        for (const row of rows) {
+          this.tree.appendChild(row);
+        }
+      }
     }
   }
   renderRow(node, depth, expanded, selected) {
@@ -16060,6 +16279,7 @@ class EditorOoldTreeSelect extends EditorString {
     }
     row.appendChild(this.renderToggle(node, expanded));
     row.appendChild(this.renderPicker(node, isSelected));
+    row.appendChild(this.renderMeta(node));
     return row;
   }
   renderToggle(node, expanded) {
@@ -16090,17 +16310,14 @@ class EditorOoldTreeSelect extends EditorString {
     if (!this.multiple) {
       const picker = document.createElement("button");
       picker.setAttribute("type", "button");
-      picker.classList.add("jedi-oold-tree-select", "btn", "btn-link", "p-0", "text-decoration-none");
+      picker.classList.add("jedi-oold-tree-select", "btn", "btn-link", "p-0", "text-decoration-none", "flex-grow-1", "text-start");
       picker.setAttribute("always-enabled", "");
       picker.textContent = label;
-      if (node.kind === "instance") {
-        picker.classList.add("fst-italic");
-      }
       picker.addEventListener("click", () => this.pick(node.id));
       return picker;
     }
     const wrapper = document.createElement("div");
-    wrapper.classList.add("form-check", "m-0");
+    wrapper.classList.add("form-check", "m-0", "flex-grow-1");
     const input = document.createElement("input");
     input.setAttribute("type", "checkbox");
     input.classList.add("form-check-input", "jedi-oold-tree-check");
@@ -16115,6 +16332,16 @@ class EditorOoldTreeSelect extends EditorString {
     wrapper.appendChild(text);
     return wrapper;
   }
+  /**
+   * The metadata column. A tree of identifiers alone does not say which entry
+   * is a class and which an instance.
+   */
+  renderMeta(node) {
+    const meta = document.createElement("small");
+    meta.classList.add("jedi-oold-tree-meta", "text-muted", "ms-auto");
+    meta.textContent = node.kind === "instance" ? "instance" : "class";
+    return meta;
+  }
   pick(id) {
     const value = this.controller.select(id);
     this.instance.setValue(this.multiple ? value ?? [] : value ?? "", true, "user");
@@ -16127,8 +16354,10 @@ class EditorOoldTreeSelect extends EditorString {
   refreshUI() {
     Editor.prototype.refreshUI.call(this);
     this.controller.setValue(this.instance.getValue());
+    this.renderPills();
   }
   destroy() {
+    this.closePicker();
     this.controller.destroy();
     super.destroy();
   }
@@ -16151,55 +16380,54 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
    */
   static defaultColumns() {
     return [
-      { id: "*", title: "Class", width: "20rem" },
-      { id: "kind", title: "Kind", width: "6rem" },
+      { id: "*", title: "Entry", width: "280px" },
+      { id: "kind", title: "Kind", width: "90px" },
       { id: "id", title: "Identifier", width: "*" }
     ];
   }
-  build() {
-    super.build();
-    this.tree.textContent = "";
-    this.tree.classList.remove("list-group");
-    this.tree.classList.add("wb-skeleton", "jedi-oold-tree-wb");
-    this.tree.style.minHeight = "12rem";
-    this.buildSearch();
+  mountTree(host) {
+    this.treeContainer = host;
+    this.tree = document.createElement("div");
+    this.tree.classList.add("jedi-oold-tree", "jedi-oold-tree-wb");
+    this.tree.setAttribute("id", `${this.getIdFromPath(this.instance.path)}-wb`);
+    this.tree.style.height = "24rem";
+    this.buildSearch(host);
+    host.appendChild(this.tree);
     this.buildWunderbaum();
   }
-  buildSearch() {
-    if (getSchemaXOption(this.instance.schema, "oold-tree-search") === false) {
+  /**
+   * Wunderbaum owns its search behaviour, so the base class box is rewired to
+   * its filter rather than to the themed row rendering.
+   */
+  applyFilter(text) {
+    if (!this.wunderbaum) {
       return;
     }
-    const search = document.createElement("input");
-    search.setAttribute("type", "search");
-    search.classList.add("form-control", "jedi-oold-tree-search");
-    search.setAttribute("placeholder", "Filter");
-    search.addEventListener("input", () => {
-      if (!this.wunderbaum) {
-        return;
-      }
-      if (search.value === "") {
-        this.wunderbaum.clearFilter();
-        return;
-      }
-      this.wunderbaum.filterNodes(search.value, { mode: "dim", fuzzy: false });
-    });
-    this.control.container.insertBefore(search, this.tree);
-    this.search = search;
+    if (!text) {
+      this.wunderbaum.clearFilter();
+      return;
+    }
+    this.wunderbaum.filterNodes(String(text), { mode: "hide", fuzzy: false });
   }
   buildWunderbaum() {
     const columns = getSchemaXOption(this.instance.schema, "oold-tree-columns") ?? EditorOoldTreeSelectWunderbaum.defaultColumns();
     const options = {
       element: this.tree,
-      id: `${this.getIdFromPath(this.instance.path)}-wb`,
+      id: `${this.getIdFromPath(this.instance.path)}-wbtree`,
       selectMode: this.multiple ? "multi" : "single",
       checkbox: this.multiple,
-      filter: { mode: "dim", autoApply: true },
-      source: (event) => this.loadRoots(event),
+      filter: { mode: "hide", autoApply: true },
+      // source takes data, not a callback. A function here silently renders an
+      // empty tree, so the roots are loaded and handed over explicitly below.
+      source: [],
       lazyLoad: (event) => this.loadChildren(event),
       ...getSchemaXOption(this.instance.schema, "oold-wunderbaum") ?? {}
     };
     if (isArray(columns) && columns.length > 1) {
       options.columns = columns;
+    }
+    if (isArray(options.columns)) {
+      options.render = (event) => this.renderColumns(event);
     }
     if (this.multiple) {
       options.select = () => this.syncFromTree();
@@ -16207,6 +16435,24 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       options.activate = () => this.syncFromTree();
     }
     this.wunderbaum = new window.mar10.Wunderbaum(options);
+    this.controller.init().then((ids) => this.wunderbaum.load(this.nodesFor(ids))).then(() => this.restoreSelection()).catch((error) => console.error("oold: wunderbaum load failed", error));
+  }
+  /**
+   * Fills the metadata columns from the node data.
+   */
+  renderColumns(event) {
+    const columns = event.allColInfosById;
+    if (!columns || !event.node) {
+      return;
+    }
+    const data = event.node.data ?? {};
+    for (const [id, info] of Object.entries(columns)) {
+      if (id === "*" || !info || !info.elem) {
+        continue;
+      }
+      const value = data[id] ?? event.node[id];
+      info.elem.textContent = value === void 0 || value === null ? "" : String(value);
+    }
   }
   /**
    * Wunderbaum node shape. `lazy` is what makes it ask for children later,
@@ -16218,7 +16464,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       title: entry.label ?? entry.id,
       lazy: entry.kind === "class",
       type: entry.kind,
-      kind: entry.kind === "class" ? "Class" : "Instance",
+      kind: entry.kind === "class" ? "class" : "instance",
       id: entry.id
     };
   }
@@ -16226,9 +16472,6 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     const snapshot = this.controller.snapshot();
     const byId = new Map(snapshot.nodes.map((entry) => [entry.id, entry]));
     return (isArray(ids) ? ids : []).map((id) => this.toNode(byId.get(id) ?? { id, label: id, kind: "class" }));
-  }
-  async loadRoots() {
-    return this.nodesFor(await this.controller.init());
   }
   async loadChildren(event) {
     const key = event && event.node ? event.node.key : void 0;
@@ -16249,28 +16492,21 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       const keys = this.wunderbaum.getSelectedNodes().map((node) => node.key);
       this.controller.setValue(keys);
       this.instance.setValue(keys, true, "user");
+      this.renderPills();
       return;
     }
     const active = this.wunderbaum.getActiveNode();
     const key = active ? active.key : "";
     this.controller.setValue(key);
     this.instance.setValue(key, true, "user");
+    this.renderPills();
   }
-  /**
-   * The base class re-renders the themed rows on every controller change.
-   * Wunderbaum owns its own DOM, so that is suppressed here.
-   */
-  renderTree() {
-  }
-  refreshUI() {
-    this.refreshDisabledState();
+  restoreSelection() {
     if (!this.wunderbaum) {
       return;
     }
-    const value = this.instance.getValue();
-    const wanted = (isArray(value) ? value : [value]).filter(Boolean);
-    for (const key of wanted) {
-      const node = this.wunderbaum.findKey(key);
+    for (const id of this.selectedIds()) {
+      const node = this.wunderbaum.findKey(id);
       if (!node) {
         continue;
       }
@@ -16281,12 +16517,24 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       }
     }
   }
-  destroy() {
+  /**
+   * The base class re-renders the themed rows on every controller change.
+   * Wunderbaum owns its own DOM, so that is suppressed here.
+   */
+  renderTree() {
+  }
+  unmountTree() {
     if (this.wunderbaum && typeof this.wunderbaum.destroy === "function") {
       this.wunderbaum.destroy();
     }
     this.wunderbaum = null;
-    super.destroy();
+    super.unmountTree();
+  }
+  refreshUI() {
+    this.refreshDisabledState();
+    this.controller.setValue(this.instance.getValue());
+    this.renderPills();
+    this.restoreSelection();
   }
 }
 const WUNDERBAUM_CDN = {

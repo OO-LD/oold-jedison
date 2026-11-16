@@ -57,12 +57,109 @@ Scenario('@feature @oold offers a class choice when the range is a union', ({ I 
   I.seeElement('.jedi-oold-class-option')
 })
 
-Scenario('@feature @oold renders a lazily expanded class tree', ({ I }) => {
+Scenario('@feature @oold shows the selection as pills, not a permanent tree', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-pills', 10)
+  I.dontSeeElement('[data-path="#/primary_class"] .jedi-oold-tree')
+  I.see('Click to browse', '[data-path="#/primary_class"] .jedi-oold-pills')
+})
+
+Scenario('@feature @oold opens the tree when the field is clicked', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-pills', 10)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog.jedi-oold-tree-dialog[open]', 10)
+  I.waitForElement('dialog .jedi-oold-tree', 10)
+})
+
+Scenario('@feature @oold closes the tree again on done', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog.jedi-oold-tree-dialog[open]', 10)
+  I.click('dialog .jedi-oold-tree-done')
+  I.waitForInvisible('dialog.jedi-oold-tree-dialog', 10)
+})
+
+Scenario('@feature @oold loads children lazily on expand', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-row .wb-title', 15)
+  I.dontSee('Organization', 'dialog .wb-node-list')
+  I.click('dialog .wb-row .wb-expander')
+  I.waitForText('Organization', 15, 'dialog .wb-node-list')
+})
+
+Scenario('@feature @oold writes the selected class into the value', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-row .wb-title', 15)
+  I.click('dialog .wb-row .wb-title')
+  I.click('dialog .jedi-oold-tree-done')
+  I.waitForInvisible('dialog.jedi-oold-tree-dialog', 10)
+  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-pill', 10)
+  I.seeInField('#editor-value', 'Thing.schema.json')
+})
+
+Scenario('@feature @oold removes a selection from its pill', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-row .wb-title', 15)
+  I.click('dialog .wb-row .wb-title')
+  I.click('dialog .jedi-oold-tree-done')
+  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-pill-remove', 10)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pill-remove')
+  I.waitForText('Click to browse', 10, '[data-path="#/primary_class"] .jedi-oold-pills')
+})
+
+Scenario('@feature @oold selects several entries for an array property', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/applies_to"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-node-list .wb-row .wb-checkbox', 15)
+  I.click('dialog .wb-node-list .wb-row .wb-expander')
+  I.waitForText('Organization', 15, 'dialog .wb-node-list')
+  I.click('dialog .wb-node-list .wb-row:nth-child(2) .wb-checkbox')
+  I.click('dialog .wb-node-list .wb-row:nth-child(3) .wb-checkbox')
+  I.click('dialog .jedi-oold-tree-done')
+  I.waitForElement('[data-path="#/applies_to"] .jedi-oold-pill', 10)
+  I.seeNumberOfVisibleElements('[data-path="#/applies_to"] .jedi-oold-pill', 2)
+})
+
+Scenario('@feature @oold shows metadata columns beside the title', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-row .wb-title', 15)
+  I.seeElement('dialog .wb-col-title')
+  I.see('class', 'dialog .wb-row')
+})
+
+Scenario('@feature @oold filters the tree down to a match', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .wb-row .wb-title', 15)
+  I.fillField('dialog .jedi-oold-tree-search', 'zzzz-no-match')
+  // A filter that matches nothing leaves a status row rather than hiding the list.
+  I.waitForElement('dialog .wb-row.wb-status-noData', 10)
+  I.dontSee('Thing', 'dialog .wb-node-list')
+})
+
+Scenario('@feature @oold falls back to themed rows without wunderbaum', ({ I }) => {
   I._selectExample('oold/tree-select', 25)
   I.uncheckOption('#oold-wunderbaum')
-  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-tree', 10)
-  I.click('[data-path="#/primary_class"] .jedi-oold-tree-toggle')
-  I.waitForElement('[data-path="#/primary_class"] [data-oold-node*="Organization"]', 10)
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .jedi-oold-tree.list-group', 10)
+  I.waitForElement('dialog .jedi-oold-tree-row.list-group-item', 10)
+})
+
+Scenario('@feature @oold expands and selects in the fallback tree', ({ I }) => {
+  I._selectExample('oold/tree-select', 25)
+  I.uncheckOption('#oold-wunderbaum')
+  I.click('[data-path="#/primary_class"] .jedi-oold-pills')
+  I.waitForElement('dialog .jedi-oold-tree-row', 10)
+  I.click('dialog .jedi-oold-tree-toggle')
+  I.waitForElement('dialog [data-oold-node*="Organization"]', 10)
+  I.click('dialog [data-oold-node*="Organization"] .jedi-oold-tree-select')
+  I.click('dialog .jedi-oold-tree-done')
+  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-pill', 10)
 })
 
 Scenario('@feature @oold switches the schema and keeps the entered values', ({ I }) => {
@@ -146,27 +243,6 @@ Scenario('@feature @oold restores a value when the class comes back', ({ I }) =>
   I.selectOption('#oold-class', 'https://demo.oo-ld.org/schemas/Person.schema.json')
   I.waitForElement('#oold-restored', 10)
   I.waitForValue('[data-path="#/email"] input', 'ada@example.org', 10)
-})
-
-Scenario('@feature @oold falls back to themed rows without wunderbaum', ({ I }) => {
-  I._selectExample('oold/tree-select', 25)
-  I.uncheckOption('#oold-wunderbaum')
-  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-tree.list-group', 10)
-  I.seeElement('[data-path="#/primary_class"] .jedi-oold-tree-row.list-group-item')
-})
-
-Scenario('@feature @oold renders the tree with wunderbaum when it is loaded', ({ I }) => {
-  I._selectExample('oold/tree-select', 25)
-  I.waitForElement('[data-path="#/primary_class"] .jedi-oold-tree-wb', 10)
-  I.waitForElement('[data-path="#/primary_class"] div.wb-row', 15)
-  I.seeElement('[data-path="#/primary_class"] input.jedi-oold-tree-search')
-})
-
-Scenario('@feature @oold filters the wunderbaum tree from the search box', ({ I }) => {
-  I._selectExample('oold/tree-select', 25)
-  I.waitForElement('[data-path="#/primary_class"] div.wb-row', 15)
-  I.fillField('[data-path="#/primary_class"] input.jedi-oold-tree-search', 'zzzz')
-  I.waitForElement('[data-path="#/primary_class"] .wunderbaum.wb-ext-filter-dim', 10)
 })
 
 Scenario('@feature @oold applies density to control size, not just layout', ({ I }) => {

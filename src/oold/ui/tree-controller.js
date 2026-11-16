@@ -1,6 +1,13 @@
 import { isArray } from '../../helpers/utils.js'
 
 /**
+ * Last path segment without the schema suffix, as a readable last resort.
+ */
+function shortName (id) {
+  return String(id).split(/[/#]/).filter(Boolean).pop().replace(/\.schema\.json$/, '')
+}
+
+/**
  * A lazily loaded hierarchy, without any DOM.
  *
  * Children are fetched on expansion rather than up front, because OO-LD has no
@@ -141,17 +148,55 @@ export class TreeController {
   async labelAll (ids) {
     const classes = ids.filter((id) => this.node(id).kind === 'class')
 
-    if (!classes.length || !this.backend || !this.backend.can('canLabel')) {
+    if (!classes.length) {
       return
     }
 
-    const labels = await this.backend.instances.getLabels(classes, this.language)
+    if (this.backend && this.backend.can('canLabel')) {
+      const labels = await this.backend.instances.getLabels(classes, this.language)
 
-    for (const [id, label] of Object.entries(labels ?? {})) {
-      if (label) {
-        this.node(id).label = label
+      for (const [id, label] of Object.entries(labels ?? {})) {
+        if (label) {
+          this.node(id).label = label
+        }
       }
     }
+
+    // A class is rarely an instance, so the instance store usually knows no
+    // label for it. The schema does: its title is the name to show.
+    await Promise.all(classes.map((id) => this.labelClass(id)))
+  }
+
+  async labelClass (id) {
+    const node = this.node(id)
+
+    if (node.label !== id) {
+      return node.label
+    }
+
+    if (!this.backend || !this.backend.schemas) {
+      node.label = shortName(id)
+      return node.label
+    }
+
+    try {
+      const response = await this.backend.schemas.resolve(id)
+
+      if (response && response.ok) {
+        const schema = await response.json()
+
+        if (schema && typeof schema.title === 'string' && schema.title !== '') {
+          node.label = schema.title
+          return node.label
+        }
+      }
+    } catch (error) {
+      // Falls through to the derived name.
+    }
+
+    node.label = shortName(id)
+
+    return node.label
   }
 
   select (id) {
