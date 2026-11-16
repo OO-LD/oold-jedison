@@ -264,13 +264,15 @@
 <script>
 
 import EditorStringCustom from "./js/custom-editor.js"
-import { createDemoBackend, demoClasses, classSchema, isOoldExample } from "./js/oold-demo.js"
+import { createDemoBackend, createRemoteBackends, demoClasses, classSchema, isOoldExample } from "./js/oold-demo.js"
 import ooldInlineCreate from "./json/oold/inline-create.json"
 import ooldUnionRange from "./json/oold/union-range.json"
 import ooldTypeSwitch from "./json/oold/type-switch.json"
 import ooldTreeSelect from "./json/oold/tree-select.json"
 import ooldAutocomplete from "./json/oold/autocomplete.json"
 import ooldDensity from "./json/oold/density.json"
+import ooldRemoteWikidata from "./json/oold/remote-wikidata.json"
+import ooldRemoteOsw from "./json/oold/remote-osw.json"
 
 import Jedison from '/src/index.js'
 import all from './json/editors/all.json'
@@ -496,6 +498,8 @@ export default {
           'oold/tree-select': ooldTreeSelect,
           'oold/autocomplete': ooldAutocomplete,
           'oold/density': ooldDensity,
+          'oold/remote-wikidata': ooldRemoteWikidata,
+          'oold/remote-osw': ooldRemoteOsw,
         },
         'Editors': {
           'editors/all': all,
@@ -731,6 +735,7 @@ export default {
       theme: 'barebones',
       iconLib: 'bootstrap-icons',
       ooldBackend: createDemoBackend(),
+      ooldBackends: createRemoteBackends(),
       ooldDensityLevel: 'comfortable',
       ooldClass: '',
       ooldClasses: demoClasses(),
@@ -1098,6 +1103,7 @@ export default {
         ],
         oold: {
           backend: this.ooldBackend,
+          backends: { demo: this.ooldBackend, ...this.ooldBackends },
           language: this.language,
           density: this.ooldDensityLevel,
           host: this.isOold ? this.buildOoldHost() : null

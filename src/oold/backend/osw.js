@@ -52,6 +52,15 @@ class AskClient {
     this.properties = { ...DEFAULT_PROPERTIES, ...(options.properties ?? {}) }
     this.limit = options.limit ?? 25
     this.language = options.language ?? 'en'
+
+    // MediaWiki's `origin` parameter makes the API emit its own CORS header.
+    // Where the site already sends one, the response carries two values and
+    // every browser rejects it, so this is opt-in rather than always on.
+    this.originParam = options.originParam ?? null
+  }
+
+  withOrigin (url) {
+    return this.originParam ? `${url}&origin=${encodeURIComponent(this.originParam)}` : url
   }
 
   printouts () {
@@ -64,7 +73,7 @@ class AskClient {
       return {}
     }
 
-    const url = `${this.apiUrl}?action=ask&format=json&origin=*&query=${encodeURIComponent(query)}`
+    const url = this.withOrigin(`${this.apiUrl}?action=ask&format=json&query=${encodeURIComponent(query)}`)
     const response = await this.fetch(url, this.fetchOptions)
 
     if (!response || !response.ok) {
@@ -197,7 +206,7 @@ export class OswInstanceStore extends InstanceStore {
       return null
     }
 
-    const url = `${this.client.apiUrl}?action=query&format=json&origin=*&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(id)}`
+    const url = this.client.withOrigin(`${this.client.apiUrl}?action=query&format=json&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(id)}`)
     const response = await this.client.fetch(url, this.client.fetchOptions)
 
     if (!response || !response.ok) {

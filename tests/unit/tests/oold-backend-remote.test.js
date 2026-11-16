@@ -160,6 +160,33 @@ describe('osw helpers', () => {
     expect(url).toContain('Category%3AOSW123')
   })
 
+  it('omits the origin parameter by default', async () => {
+    const seen = []
+    const backend = createOswBackend({
+      apiUrl: 'https://wiki.example.org/w/api.php',
+      fetch: async (url) => { seen.push(url); return { ok: true, status: 200, json: async () => ({}) } }
+    })
+
+    await backend.instances.search({ classes: ['Category:Entity'] }, 'a')
+
+    // A site that already sends an Access-Control-Allow-Origin header ends up
+    // with two values when MediaWiki adds its own, and browsers reject that.
+    expect(seen[0]).not.toContain('origin=')
+  })
+
+  it('sends the origin parameter when one is configured', async () => {
+    const seen = []
+    const backend = createOswBackend({
+      apiUrl: 'https://wiki.example.org/w/api.php',
+      originParam: '*',
+      fetch: async (url) => { seen.push(url); return { ok: true, status: 200, json: async () => ({}) } }
+    })
+
+    await backend.instances.search({ classes: ['Category:Entity'] }, 'a')
+
+    expect(seen[0]).toContain('origin=*')
+  })
+
   it('leaves an absolute url alone', () => {
     const backend = createOswBackend({ wikiUrl: 'https://wiki.example.org/w', fetch: async () => null })
     expect(backend.schemas.toSlotUrl(SCHEMA_URI)).toBe(SCHEMA_URI)

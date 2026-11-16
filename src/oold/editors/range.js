@@ -14,6 +14,23 @@ export function getOoldOptions (instance) {
   return instance.jedison.getOption('oold') ?? {}
 }
 
+/**
+ * Picks the backend a property should talk to.
+ *
+ * A form is not limited to one source: a schema may name a backend per
+ * property, which is how the same control reaches a local store for one field
+ * and a public endpoint for the next.
+ */
+export function resolveBackend (oold, schema) {
+  const named = schema?.['x-oold-jedison-source']?.backend
+
+  if (named && oold.backends && oold.backends[named]) {
+    return oold.backends[named]
+  }
+
+  return oold.backend
+}
+
 export function getRangeSpec (schema) {
   if (isSet(schema[RESOLVED])) {
     return schema[RESOLVED]
@@ -48,7 +65,7 @@ class EditorOoldRange extends EditorString {
     const oold = getOoldOptions(this.instance)
 
     this.spec = getRangeSpec(schema) ?? { classes: [], union: false }
-    this.backend = oold.backend
+    this.backend = resolveBackend(oold, schema)
     this.host = oold.host
 
     this.control = this.theme.getInputControl({
@@ -63,7 +80,11 @@ class EditorOoldRange extends EditorString {
 
     this.controller = new SuggestController({
       backend: this.backend,
-      spec: { ...this.spec, limit: getSchemaXOption(schema, 'oold-limit') },
+      spec: {
+        ...this.spec,
+        classes: this.sourceClasses(schema),
+        limit: schema['x-oold-jedison-source']?.limit ?? getSchemaXOption(schema, 'oold-limit')
+      },
       language: oold.language,
       templates: {
         render: schema['x-oold-jedison-render-template'],
@@ -74,6 +95,20 @@ class EditorOoldRange extends EditorString {
 
     this.buildSuggestionList()
     this.buildActions()
+  }
+
+  /**
+   * A remote source may state the class to search directly, for endpoints
+   * whose classes are not OO-LD schema URLs.
+   */
+  sourceClasses (schema) {
+    const stated = schema['x-oold-jedison-source']?.class
+
+    if (typeof stated === 'string' && stated !== '') {
+      return [stated]
+    }
+
+    return this.spec.classes
   }
 
   buildSuggestionList () {

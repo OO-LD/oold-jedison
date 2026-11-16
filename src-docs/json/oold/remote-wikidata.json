@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "title": "Remote autocomplete: Wikidata",
+  "description": "Backed by the public Wikidata query service over SPARQL, so the suggestions come from a real endpoint rather than bundled data. The dropdown shows the label and description; the form stores the entity IRI. The endpoint is read-only, so no create button is offered: the backend reports what it can do and the control follows.",
+  "properties": {
+    "element": {
+      "type": "string",
+      "title": "Chemical element",
+      "format": "iri-reference",
+      "x-format": "oold-autocomplete",
+      "x-oold-ui-hint": "Type at least three letters, for example 'sili' or 'carb'.",
+      "x-oold-jedison-source": {
+        "backend": "wikidata",
+        "class": "http://www.wikidata.org/entity/Q11344",
+        "limit": 10
+      },
+      "x-oold-jedison-label-template": "{{label}}"
+    },
+    "subclass_of": {
+      "type": "string",
+      "title": "Browse subclasses of 'chemical element'",
+      "x-format": "oold-tree-select",
+      "x-oold-range": "http://www.wikidata.org/entity/Q11344",
+      "x-oold-jedison-source": {
+        "backend": "wikidata"
+      }
+    }
+  }
+}

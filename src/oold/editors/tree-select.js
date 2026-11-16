@@ -3,7 +3,7 @@ import EditorString from '../../editors/string.js'
 import { isArray, isSet } from '../../helpers/utils.js'
 import { getSchemaType, getSchemaXOption } from '../../helpers/schema.js'
 import { TreeController } from '../ui/tree-controller.js'
-import { getRangeSpec, getOoldOptions } from './range.js'
+import { getRangeSpec, getOoldOptions, resolveBackend } from './range.js'
 
 const FORMAT = 'oold-tree-select'
 
@@ -51,7 +51,7 @@ class EditorOoldTreeSelect extends EditorString {
     const itemSchema = this.multiple && isSet(schema.items) ? schema.items : schema
     const spec = getRangeSpec(itemSchema) ?? { classes: [] }
 
-    this.backend = oold.backend
+    this.backend = resolveBackend(oold, itemSchema) ?? resolveBackend(oold, schema)
 
     this.control = this.theme.getInputControl({
       title: this.getTitle(),

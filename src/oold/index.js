@@ -9,7 +9,7 @@ import { OoldRefResolver } from './preprocess/oold-ref.js'
 import * as backend from './backend/index.js'
 import * as constants from './constants.js'
 import { createOoldEditor, prepareSchema, OOLD_EDITORS } from './create.js'
-import EditorOoldRange from './editors/range.js'
+import EditorOoldRange, { resolveBackend } from './editors/range.js'
 import EditorOoldAutocomplete from './editors/autocomplete.js'
 import EditorOoldTreeSelect from './editors/tree-select.js'
 import EditorOoldTreeSelectWunderbaum, { WUNDERBAUM_CDN } from './editors/tree-select-wunderbaum.js'
@@ -38,6 +38,7 @@ export {
   prepareSchema,
   OOLD_EDITORS,
   EditorOoldRange,
+  resolveBackend,
   EditorOoldAutocomplete,
   EditorOoldTreeSelect,
   EditorOoldTreeSelectWunderbaum,

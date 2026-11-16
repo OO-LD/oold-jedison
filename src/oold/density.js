@@ -30,7 +30,8 @@ export const DENSITY_TOKENS = {
     '--jedi-legend-font-size': '1.25rem',
     '--jedi-help-font-size': '0.875rem',
     '--jedi-nest-indent': '1rem',
-    '--jedi-row-padding-y': '0.5rem'
+    '--jedi-row-padding-y': '0.5rem',
+    '--jedi-label-width': 'auto'
   },
   compact: {
     '--jedi-control-padding-y': '0.1875rem',
@@ -43,7 +44,8 @@ export const DENSITY_TOKENS = {
     '--jedi-legend-font-size': '0.9375rem',
     '--jedi-help-font-size': '0.75rem',
     '--jedi-nest-indent': '0.75rem',
-    '--jedi-row-padding-y': '0.25rem'
+    '--jedi-row-padding-y': '0.25rem',
+    '--jedi-label-width': 'auto'
   },
   dense: {
     '--jedi-control-padding-y': '0.0625rem',
@@ -56,7 +58,8 @@ export const DENSITY_TOKENS = {
     '--jedi-legend-font-size': '0.875rem',
     '--jedi-help-font-size': '0.6875rem',
     '--jedi-nest-indent': '0.5rem',
-    '--jedi-row-padding-y': '0.125rem'
+    '--jedi-row-padding-y': '0.125rem',
+    '--jedi-label-width': '11rem'
   }
 }
 
@@ -136,6 +139,50 @@ const STYLE_TEXT = `
 .jedi-density table th {
   padding: var(--jedi-row-padding-y) var(--jedi-control-padding-x);
   font-size: var(--jedi-control-font-size);
+}
+
+/* A control group with buttons beside the input must not be taller than a
+   plain field. Bootstrap sizes .input-group children on its own, and those
+   rules are more specific than the element selectors above. */
+.jedi-density .input-group > .form-control,
+.jedi-density .input-group > input,
+.jedi-density .input-group > select,
+.jedi-density .input-group-text,
+.jedi-density .jedi-oold-actions,
+.jedi-density .jedi-oold-actions > button {
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+  line-height: var(--jedi-control-line-height);
+  min-height: 0;
+}
+.jedi-density .jedi-oold-actions {
+  background: none;
+  border: 0;
+}
+
+/* Dense puts the label beside the input rather than above it: at this size a
+   stacked label costs as much vertical space as the field it names. */
+[data-jedi-density="dense"] .mb-3 {
+  display: grid;
+  grid-template-columns: var(--jedi-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+}
+[data-jedi-density="dense"] .mb-3 > label {
+  grid-column: 1;
+  margin-bottom: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-jedi-density="dense"] .mb-3 > *:not(label) {
+  grid-column: 2;
+}
+/* An object or array keeps the full width; only leaf controls pair up. */
+[data-jedi-density="dense"] .mb-3:has(> fieldset),
+[data-jedi-density="dense"] .mb-3:has(> .jedi-array-control) {
+  display: block;
 }
 `
 

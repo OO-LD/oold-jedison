@@ -15083,6 +15083,10 @@ class AskClient {
     this.properties = { ...DEFAULT_PROPERTIES, ...options.properties ?? {} };
     this.limit = options.limit ?? 25;
     this.language = options.language ?? "en";
+    this.originParam = options.originParam ?? null;
+  }
+  withOrigin(url) {
+    return this.originParam ? `${url}&origin=${encodeURIComponent(this.originParam)}` : url;
   }
   printouts() {
     const { label, image, description, type: type2 } = this.properties;
@@ -15093,7 +15097,7 @@ class AskClient {
     if (!this.fetch || !this.apiUrl || !query) {
       return {};
     }
-    const url = `${this.apiUrl}?action=ask&format=json&origin=*&query=${encodeURIComponent(query)}`;
+    const url = this.withOrigin(`${this.apiUrl}?action=ask&format=json&query=${encodeURIComponent(query)}`);
     const response = await this.fetch(url, this.fetchOptions);
     if (!response || !response.ok) {
       return {};
@@ -15196,7 +15200,7 @@ class OswInstanceStore extends InstanceStore {
     if (!this.client.fetch || !this.client.apiUrl) {
       return null;
     }
-    const url = `${this.client.apiUrl}?action=query&format=json&origin=*&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(id)}`;
+    const url = this.client.withOrigin(`${this.client.apiUrl}?action=query&format=json&prop=revisions&rvprop=content&rvslots=main&titles=${encodeURIComponent(id)}`);
     const response = await this.client.fetch(url, this.client.fetchOptions);
     if (!response || !response.ok) {
       return null;
@@ -15500,6 +15504,14 @@ const RESOLVED = "x-oold-range-resolved";
 function getOoldOptions(instance) {
   return instance.jedison.getOption("oold") ?? {};
 }
+function resolveBackend(oold2, schema) {
+  var _a;
+  const named = (_a = schema == null ? void 0 : schema["x-oold-jedison-source"]) == null ? void 0 : _a.backend;
+  if (named && oold2.backends && oold2.backends[named]) {
+    return oold2.backends[named];
+  }
+  return oold2.backend;
+}
 function getRangeSpec(schema) {
   if (isSet(schema[RESOLVED])) {
     return schema[RESOLVED];
@@ -15517,10 +15529,11 @@ class EditorOoldRange extends EditorString {
     return 100;
   }
   build() {
+    var _a;
     const schema = this.instance.schema;
     const oold2 = getOoldOptions(this.instance);
     this.spec = getRangeSpec(schema) ?? { classes: [], union: false };
-    this.backend = oold2.backend;
+    this.backend = resolveBackend(oold2, schema);
     this.host = oold2.host;
     this.control = this.theme.getInputControl({
       title: this.getTitle(),
@@ -15533,7 +15546,11 @@ class EditorOoldRange extends EditorString {
     });
     this.controller = new SuggestController({
       backend: this.backend,
-      spec: { ...this.spec, limit: getSchemaXOption(schema, "oold-limit") },
+      spec: {
+        ...this.spec,
+        classes: this.sourceClasses(schema),
+        limit: ((_a = schema["x-oold-jedison-source"]) == null ? void 0 : _a.limit) ?? getSchemaXOption(schema, "oold-limit")
+      },
       language: oold2.language,
       templates: {
         render: schema["x-oold-jedison-render-template"],
@@ -15543,6 +15560,18 @@ class EditorOoldRange extends EditorString {
     });
     this.buildSuggestionList();
     this.buildActions();
+  }
+  /**
+   * A remote source may state the class to search directly, for endpoints
+   * whose classes are not OO-LD schema URLs.
+   */
+  sourceClasses(schema) {
+    var _a;
+    const stated = (_a = schema["x-oold-jedison-source"]) == null ? void 0 : _a.class;
+    if (typeof stated === "string" && stated !== "") {
+      return [stated];
+    }
+    return this.spec.classes;
   }
   buildSuggestionList() {
     const list = document.createElement("ul");
@@ -16026,7 +16055,7 @@ class EditorOoldTreeSelect extends EditorString {
     const oold2 = getOoldOptions(this.instance);
     const itemSchema2 = this.multiple && isSet(schema.items) ? schema.items : schema;
     const spec = getRangeSpec(itemSchema2) ?? { classes: [] };
-    this.backend = oold2.backend;
+    this.backend = resolveBackend(oold2, itemSchema2) ?? resolveBackend(oold2, schema);
     this.control = this.theme.getInputControl({
       title: this.getTitle(),
       description: this.getDescription(),
@@ -16376,6 +16405,54 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     return 120;
   }
   /**
+   * Markers drawn by this library rather than by an icon font.
+   *
+   * Wunderbaum's shipped maps emit Bootstrap or FontAwesome classes, which
+   * render nothing at all unless the host page loaded that font. A tree whose
+   * expanders are invisible is worse than one that is plain, so the glyphs
+   * come from CSS defined here.
+   */
+  static defaultIconMap() {
+    return {
+      error: "jedi-wb-i jedi-wb-error",
+      loading: "jedi-wb-i jedi-wb-loading",
+      noData: "jedi-wb-i jedi-wb-nodata",
+      expanderExpanded: "jedi-wb-i jedi-wb-expanded",
+      expanderCollapsed: "jedi-wb-i jedi-wb-collapsed",
+      expanderLazy: "jedi-wb-i jedi-wb-collapsed",
+      checkChecked: "jedi-wb-i jedi-wb-checked",
+      checkUnchecked: "jedi-wb-i jedi-wb-unchecked",
+      checkUnknown: "jedi-wb-i jedi-wb-unchecked",
+      radioChecked: "jedi-wb-i jedi-wb-checked",
+      radioUnchecked: "jedi-wb-i jedi-wb-unchecked",
+      folder: "jedi-wb-i jedi-wb-class",
+      folderOpen: "jedi-wb-i jedi-wb-class",
+      doc: "jedi-wb-i jedi-wb-instance"
+    };
+  }
+  static injectIconStyles(doc) {
+    const target = doc ?? (typeof document !== "undefined" ? document : void 0);
+    if (!target || target.getElementById("jedi-wb-icons")) {
+      return;
+    }
+    const style = target.createElement("style");
+    style.setAttribute("id", "jedi-wb-icons");
+    style.textContent = `
+.jedi-wb-i { display: inline-block; text-align: center; line-height: 16px; font-style: normal; }
+.jedi-wb-i::before { font-style: normal; }
+.jedi-wb-collapsed::before { content: "\\25B8"; }
+.jedi-wb-expanded::before { content: "\\25BE"; }
+.jedi-wb-loading::before { content: "\\00B7\\00B7\\00B7"; letter-spacing: -1px; }
+.jedi-wb-error::before { content: "!"; }
+.jedi-wb-nodata::before { content: "\\2205"; }
+.jedi-wb-unchecked::before { content: "\\2610"; }
+.jedi-wb-checked::before { content: "\\2611"; }
+.jedi-wb-class::before { content: "\\25C7"; opacity: .65; }
+.jedi-wb-instance::before { content: "\\25CF"; opacity: .45; font-size: .7em; }
+`;
+    target.head.appendChild(style);
+  }
+  /**
    * Label plus the metadata columns. `*` is Wunderbaum's node-title column.
    */
   static defaultColumns() {
@@ -16386,6 +16463,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
     ];
   }
   mountTree(host) {
+    EditorOoldTreeSelectWunderbaum.injectIconStyles(host.ownerDocument);
     this.treeContainer = host;
     this.tree = document.createElement("div");
     this.tree.classList.add("jedi-oold-tree", "jedi-oold-tree-wb");
@@ -16417,6 +16495,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       selectMode: this.multiple ? "multi" : "single",
       checkbox: this.multiple,
       filter: { mode: "hide", autoApply: true },
+      iconMap: EditorOoldTreeSelectWunderbaum.defaultIconMap(),
       // source takes data, not a callback. A function here silently renders an
       // empty tree, so the roots are loaded and handed over explicitly below.
       source: [],
@@ -16774,7 +16853,8 @@ const DENSITY_TOKENS = {
     "--jedi-legend-font-size": "1.25rem",
     "--jedi-help-font-size": "0.875rem",
     "--jedi-nest-indent": "1rem",
-    "--jedi-row-padding-y": "0.5rem"
+    "--jedi-row-padding-y": "0.5rem",
+    "--jedi-label-width": "auto"
   },
   compact: {
     "--jedi-control-padding-y": "0.1875rem",
@@ -16787,7 +16867,8 @@ const DENSITY_TOKENS = {
     "--jedi-legend-font-size": "0.9375rem",
     "--jedi-help-font-size": "0.75rem",
     "--jedi-nest-indent": "0.75rem",
-    "--jedi-row-padding-y": "0.25rem"
+    "--jedi-row-padding-y": "0.25rem",
+    "--jedi-label-width": "auto"
   },
   dense: {
     "--jedi-control-padding-y": "0.0625rem",
@@ -16800,7 +16881,8 @@ const DENSITY_TOKENS = {
     "--jedi-legend-font-size": "0.875rem",
     "--jedi-help-font-size": "0.6875rem",
     "--jedi-nest-indent": "0.5rem",
-    "--jedi-row-padding-y": "0.125rem"
+    "--jedi-row-padding-y": "0.125rem",
+    "--jedi-label-width": "11rem"
   }
 };
 const DENSITY_OPTIONS = {
@@ -16866,6 +16948,50 @@ const STYLE_TEXT = `
 .jedi-density table th {
   padding: var(--jedi-row-padding-y) var(--jedi-control-padding-x);
   font-size: var(--jedi-control-font-size);
+}
+
+/* A control group with buttons beside the input must not be taller than a
+   plain field. Bootstrap sizes .input-group children on its own, and those
+   rules are more specific than the element selectors above. */
+.jedi-density .input-group > .form-control,
+.jedi-density .input-group > input,
+.jedi-density .input-group > select,
+.jedi-density .input-group-text,
+.jedi-density .jedi-oold-actions,
+.jedi-density .jedi-oold-actions > button {
+  padding: var(--jedi-control-padding-y) var(--jedi-control-padding-x);
+  font-size: var(--jedi-control-font-size);
+  line-height: var(--jedi-control-line-height);
+  min-height: 0;
+}
+.jedi-density .jedi-oold-actions {
+  background: none;
+  border: 0;
+}
+
+/* Dense puts the label beside the input rather than above it: at this size a
+   stacked label costs as much vertical space as the field it names. */
+[data-jedi-density="dense"] .mb-3 {
+  display: grid;
+  grid-template-columns: var(--jedi-label-width) minmax(0, 1fr);
+  align-items: center;
+  column-gap: 0.5rem;
+}
+[data-jedi-density="dense"] .mb-3 > label {
+  grid-column: 1;
+  margin-bottom: 0;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+[data-jedi-density="dense"] .mb-3 > *:not(label) {
+  grid-column: 2;
+}
+/* An object or array keeps the full width; only leaf controls pair up. */
+[data-jedi-density="dense"] .mb-3:has(> fieldset),
+[data-jedi-density="dense"] .mb-3:has(> .jedi-array-control) {
+  display: block;
 }
 `;
 function injectDensityStyles(doc) {
@@ -17197,6 +17323,7 @@ const oold = /* @__PURE__ */ Object.freeze(/* @__PURE__ */ Object.defineProperty
   prepareSchema,
   preprocess,
   rebase,
+  resolveBackend,
   resolveMultilang,
   stripSemantics,
   template

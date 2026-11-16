@@ -37,6 +37,58 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
   }
 
   /**
+   * Markers drawn by this library rather than by an icon font.
+   *
+   * Wunderbaum's shipped maps emit Bootstrap or FontAwesome classes, which
+   * render nothing at all unless the host page loaded that font. A tree whose
+   * expanders are invisible is worse than one that is plain, so the glyphs
+   * come from CSS defined here.
+   */
+  static defaultIconMap () {
+    return {
+      error: 'jedi-wb-i jedi-wb-error',
+      loading: 'jedi-wb-i jedi-wb-loading',
+      noData: 'jedi-wb-i jedi-wb-nodata',
+      expanderExpanded: 'jedi-wb-i jedi-wb-expanded',
+      expanderCollapsed: 'jedi-wb-i jedi-wb-collapsed',
+      expanderLazy: 'jedi-wb-i jedi-wb-collapsed',
+      checkChecked: 'jedi-wb-i jedi-wb-checked',
+      checkUnchecked: 'jedi-wb-i jedi-wb-unchecked',
+      checkUnknown: 'jedi-wb-i jedi-wb-unchecked',
+      radioChecked: 'jedi-wb-i jedi-wb-checked',
+      radioUnchecked: 'jedi-wb-i jedi-wb-unchecked',
+      folder: 'jedi-wb-i jedi-wb-class',
+      folderOpen: 'jedi-wb-i jedi-wb-class',
+      doc: 'jedi-wb-i jedi-wb-instance'
+    }
+  }
+
+  static injectIconStyles (doc) {
+    const target = doc ?? (typeof document !== 'undefined' ? document : undefined)
+
+    if (!target || target.getElementById('jedi-wb-icons')) {
+      return
+    }
+
+    const style = target.createElement('style')
+    style.setAttribute('id', 'jedi-wb-icons')
+    style.textContent = `
+.jedi-wb-i { display: inline-block; text-align: center; line-height: 16px; font-style: normal; }
+.jedi-wb-i::before { font-style: normal; }
+.jedi-wb-collapsed::before { content: "\\25B8"; }
+.jedi-wb-expanded::before { content: "\\25BE"; }
+.jedi-wb-loading::before { content: "\\00B7\\00B7\\00B7"; letter-spacing: -1px; }
+.jedi-wb-error::before { content: "!"; }
+.jedi-wb-nodata::before { content: "\\2205"; }
+.jedi-wb-unchecked::before { content: "\\2610"; }
+.jedi-wb-checked::before { content: "\\2611"; }
+.jedi-wb-class::before { content: "\\25C7"; opacity: .65; }
+.jedi-wb-instance::before { content: "\\25CF"; opacity: .45; font-size: .7em; }
+`
+    target.head.appendChild(style)
+  }
+
+  /**
    * Label plus the metadata columns. `*` is Wunderbaum's node-title column.
    */
   static defaultColumns () {
@@ -50,6 +102,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
   }
 
   mountTree (host) {
+    EditorOoldTreeSelectWunderbaum.injectIconStyles(host.ownerDocument)
     this.treeContainer = host
 
     this.tree = document.createElement('div')
@@ -90,6 +143,7 @@ class EditorOoldTreeSelectWunderbaum extends EditorOoldTreeSelect {
       selectMode: this.multiple ? 'multi' : 'single',
       checkbox: this.multiple,
       filter: { mode: 'hide', autoApply: true },
+      iconMap: EditorOoldTreeSelectWunderbaum.defaultIconMap(),
       // source takes data, not a callback. A function here silently renders an
       // empty tree, so the roots are loaded and handed over explicitly below.
       source: [],

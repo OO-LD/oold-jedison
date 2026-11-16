@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "title": "Remote autocomplete: OpenSemanticLab",
+  "description": "Backed by the public demo wiki at demo.open-semantic-lab.org through the Semantic MediaWiki ask API. The same control, the same schema keywords, a different backend: everything specific to that API lives in the adapter rather than in the form.",
+  "properties": {
+    "entity": {
+      "type": "string",
+      "title": "Entity",
+      "format": "iri-reference",
+      "x-format": "oold-autocomplete",
+      "x-oold-ui-hint": "Searches page labels on the demo wiki.",
+      "x-oold-jedison-source": {
+        "backend": "osw",
+        "class": "Category:Entity",
+        "limit": 10
+      }
+    }
+  }
+}

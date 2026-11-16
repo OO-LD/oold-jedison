@@ -2,7 +2,7 @@ import Jedison from '../../src/index.js'
 import classes from '../json/oold/classes.json'
 import instances from '../json/oold/instances.json'
 
-const { createStaticBackend } = Jedison.oold.backend
+const { createStaticBackend, createSparqlBackend, createOswBackend, WIKIDATA_QUERIES } = Jedison.oold.backend
 
 export const BASE = 'https://demo.oo-ld.org/schemas/'
 
@@ -42,13 +42,37 @@ export function classSchema (id) {
   return Object.values(classes).find((schema) => schema.$id === id)
 }
 
+/**
+ * The public endpoints the specification names, wired through the same
+ * interfaces as the bundled one. Both are read-only, so the controls that
+ * would write are simply not offered.
+ */
+export function createRemoteBackends () {
+  return {
+    wikidata: createSparqlBackend({
+      name: 'wikidata',
+      endpoint: 'https://query.wikidata.org/sparql',
+      queries: WIKIDATA_QUERIES,
+      limit: 10
+    }),
+    osw: createOswBackend({
+      name: 'osw',
+      apiUrl: 'https://demo.open-semantic-lab.org/w/api.php',
+      wikiUrl: 'https://demo.open-semantic-lab.org/w',
+      limit: 10
+    })
+  }
+}
+
 export const OOLD_EXAMPLES = [
   'oold/inline-create',
   'oold/union-range',
   'oold/type-switch',
   'oold/tree-select',
   'oold/autocomplete',
-  'oold/density'
+  'oold/density',
+  'oold/remote-wikidata',
+  'oold/remote-osw'
 ]
 
 export function isOoldExample (name) {
